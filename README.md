@@ -28,7 +28,7 @@ Arguments:
 
 Options:
   -o, --output          Output JSON file path (default: output/<family>.json)
-  -r, --resolution      Bitmap resolution for skeletonization (default: 200)
+  -r, --resolution      Bitmap resolution for skeletonization (default: 400)
   -c, --chars           Characters to process (default: printable ASCII subset)
   -f, --force           Re-download font even if cached
 ```

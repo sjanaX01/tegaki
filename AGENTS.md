@@ -61,7 +61,7 @@ src/
   index.ts                    # CLI entry point (Padrone)
   index.test.ts               # Tests
   types.ts                    # Shared types: Point, TimedPoint, BBox, Stroke, GlyphData, FontOutput, PathCommand
-  constants.ts                # Defaults: resolution (200), chars, font family (Caveat), tolerances
+  constants.ts                # Defaults: resolution (400), chars, font family (Caveat), tolerances
   commands/
     generate.ts               # Generate command: orchestrates full pipeline
   font/

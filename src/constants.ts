@@ -1,4 +1,4 @@
-export const DEFAULT_RESOLUTION = 200;
+export const DEFAULT_RESOLUTION = 400;
 
 export const DEFAULT_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:!?\'"-()/\\@#$%&*+=<>~`^_|';
 
