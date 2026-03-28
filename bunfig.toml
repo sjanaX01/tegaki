@@ -1,0 +1,9 @@
+[run]
+bun = true
+silent = true
+
+[install]
+linker = "isolated"
+
+[test]
+onlyFailures = true
