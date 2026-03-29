@@ -53,11 +53,9 @@ export const tegakiProgram = createPadrone('tegaki')
 
         // Write debug output if requested
         if (debug) {
-          const lineCap = bundle.fontOutput.font.lineCap;
           const debugDir = join(outputDir, 'debug');
           for (const [char, result] of Object.entries(bundle.glyphResults)) {
-            const raster = { bitmap: result.bitmap, width: result.bitmapWidth, height: result.bitmapHeight, transform: result.transform };
-            await writeDebugOutput(debugDir, char, raster, result.skeleton, result.polylines, result.strokes, lineCap);
+            await writeDebugOutput(debugDir, char, result);
           }
         }
 

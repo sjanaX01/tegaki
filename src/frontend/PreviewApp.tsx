@@ -13,11 +13,10 @@ import {
 import { DEFAULT_CHARS, EXAMPLE_FONTS } from '../constants.ts';
 import { computeTimeline, Tegaki } from '../lib/TegakiRenderer.tsx';
 import { glyphToAnimatedSVG } from '../processing/animated-svg.ts';
+import { renderStage, STROKE_COLORS, type VisualizationStage } from '../processing/visualize.ts';
 import type { LineCap, TegakiBundle } from '../types.ts';
 
 type PreviewMode = 'glyph' | 'text';
-
-const STROKE_COLORS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990'];
 
 type Stage = 'outline' | 'flattened' | 'bitmap' | 'skeleton' | 'overlay' | 'distance' | 'traced' | 'strokes' | 'animation' | 'final';
 
@@ -585,288 +584,39 @@ export function PreviewApp() {
 
 // --- Rendering components ---
 
-function StageRenderer({ result, stage, animTime }: { result: PipelineResult; stage: Stage; animTime: number }) {
-  switch (stage) {
-    case 'outline':
-      return <OutlineView result={result} />;
-    case 'flattened':
-      return <FlattenedView result={result} />;
-    case 'bitmap':
-      return <BitmapView bitmap={result.bitmap} width={result.bitmapWidth} height={result.bitmapHeight} />;
-    case 'skeleton':
-      return <BitmapView bitmap={result.skeleton} width={result.bitmapWidth} height={result.bitmapHeight} color="#e6194b" />;
-    case 'overlay':
-      return <OverlayView result={result} />;
-    case 'distance':
-      return <DistanceView result={result} />;
-    case 'traced':
-      return <TracedView result={result} />;
-    case 'strokes':
-      return <StrokesView result={result} />;
-    case 'animation':
-      return <AnimationView result={result} time={animTime} />;
-    case 'final':
-      return <FinalView result={result} time={animTime} />;
-  }
-}
-
-function OutlineView({ result }: { result: PipelineResult }) {
-  const { pathBBox: bb, pathString } = result;
-  const pad = 20;
-  const vx = bb.x1 - pad;
-  const vy = bb.y1 - pad;
-  const vw = bb.x2 - bb.x1 + 2 * pad;
-  const vh = bb.y2 - bb.y1 + 2 * pad;
-  const { width, height } = fitSize(vw, vh, 600);
-
-  return (
-    <svg viewBox={`${vx} ${vy} ${vw} ${vh}`} className="max-w-full max-h-full" style={{ width, height }}>
-      <rect x={vx} y={vy} width={vw} height={vh} fill="white" />
-      <path d={pathString} fill="rgba(0,0,0,0.1)" stroke="black" strokeWidth={vw / 300} />
-    </svg>
-  );
-}
-
-function FlattenedView({ result }: { result: PipelineResult }) {
-  const { subPaths, pathBBox: bb } = result;
-  const pad = 20;
-  const vx = bb.x1 - pad;
-  const vy = bb.y1 - pad;
-  const vw = bb.x2 - bb.x1 + 2 * pad;
-  const vh = bb.y2 - bb.y1 + 2 * pad;
-  const { width, height } = fitSize(vw, vh, 600);
-
-  return (
-    <svg viewBox={`${vx} ${vy} ${vw} ${vh}`} className="max-w-full max-h-full" style={{ width, height }}>
-      <rect x={vx} y={vy} width={vw} height={vh} fill="white" />
-      {subPaths.map((path, i) => {
-        const d = path.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-        return <path key={i} d={d} fill="none" stroke={STROKE_COLORS[i % STROKE_COLORS.length]} strokeWidth={vw / 400} />;
-      })}
-      {subPaths.flatMap((path, pi) =>
-        path.map((p, j) => (
-          <circle key={`${pi}-${j}`} cx={p.x} cy={p.y} r={vw / 500} fill={STROKE_COLORS[pi % STROKE_COLORS.length]} opacity={0.5} />
-        )),
-      )}
-    </svg>
-  );
-}
-
-function BitmapView({ bitmap, width, height, color }: { bitmap: Uint8Array; width: number; height: number; color?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d')!;
-    const imageData = ctx.createImageData(width, height);
-    const fg = color ? parseColor(color) : [0, 0, 0];
-    for (let i = 0; i < bitmap.length; i++) {
-      const base = i * 4;
-      if (bitmap[i]) {
-        imageData.data[base] = fg[0]!;
-        imageData.data[base + 1] = fg[1]!;
-        imageData.data[base + 2] = fg[2]!;
-        imageData.data[base + 3] = 255;
-      } else {
-        imageData.data[base] = 255;
-        imageData.data[base + 1] = 255;
-        imageData.data[base + 2] = 255;
-        imageData.data[base + 3] = 255;
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-  }, [bitmap, width, height, color]);
-
+function PNGView({ data, width, height }: { data: Uint8Array; width: number; height: number }) {
+  const url = useMemo(() => URL.createObjectURL(new Blob([data.buffer as ArrayBuffer], { type: 'image/png' })), [data]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
   const { width: dw, height: dh } = fitSize(width, height, 600);
+  return <img src={url} alt="" className="border border-gray-200" style={{ imageRendering: 'pixelated', width: dw, height: dh }} />;
+}
 
+function SVGView({ svg }: { svg: string }) {
+  const { width: dw, height: dh } = useMemo(() => {
+    const vbMatch = svg.match(/viewBox="([^"]+)"/);
+    if (!vbMatch) return { width: 600, height: 600 };
+    const [, , vw, vh] = vbMatch[1]!.split(' ').map(Number);
+    return fitSize(vw!, vh!, 600);
+  }, [svg]);
   return (
-    <canvas
-      ref={canvasRef}
-      className="max-w-full max-h-full border border-gray-200"
-      style={{ imageRendering: 'pixelated', width: dw, height: dh }}
+    <div
+      className="[&>svg]:max-w-full [&>svg]:max-h-full [&>svg]:border [&>svg]:border-gray-200"
+      style={{ width: dw, height: dh }}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: SVG from shared renderers is trusted
+      dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
 }
 
-function OverlayView({ result }: { result: PipelineResult }) {
-  const { bitmap, skeleton, bitmapWidth: w, bitmapHeight: h } = result;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+function StageRenderer({ result, stage, animTime }: { result: PipelineResult; stage: Stage; animTime: number }) {
+  if (stage === 'animation') return <AnimationView result={result} time={animTime} />;
+  if (stage === 'final') return <FinalView result={result} time={animTime} />;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-    const imageData = ctx.createImageData(w, h);
-    for (let i = 0; i < bitmap.length; i++) {
-      const base = i * 4;
-      if (skeleton[i]) {
-        imageData.data[base] = 230;
-        imageData.data[base + 1] = 25;
-        imageData.data[base + 2] = 75;
-        imageData.data[base + 3] = 255;
-      } else if (bitmap[i]) {
-        imageData.data[base] = 220;
-        imageData.data[base + 1] = 220;
-        imageData.data[base + 2] = 220;
-        imageData.data[base + 3] = 255;
-      } else {
-        imageData.data[base] = 255;
-        imageData.data[base + 1] = 255;
-        imageData.data[base + 2] = 255;
-        imageData.data[base + 3] = 255;
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-  }, [bitmap, skeleton, w, h]);
-
-  const { width: dw, height: dh } = fitSize(w, h, 600);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="max-w-full max-h-full border border-gray-200"
-      style={{ imageRendering: 'pixelated', width: dw, height: dh }}
-    />
-  );
-}
-
-function DistanceView({ result }: { result: PipelineResult }) {
-  const { inverseDT, bitmap, bitmapWidth: w, bitmapHeight: h } = result;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-    const imageData = ctx.createImageData(w, h);
-
-    // Find max DT value for normalization
-    let maxDT = 0;
-    for (let i = 0; i < inverseDT.length; i++) {
-      if (bitmap[i] && inverseDT[i]! > maxDT) maxDT = inverseDT[i]!;
-    }
-
-    for (let i = 0; i < inverseDT.length; i++) {
-      const base = i * 4;
-      if (bitmap[i] && maxDT > 0) {
-        const t = inverseDT[i]! / maxDT;
-        // Heatmap: blue -> cyan -> green -> yellow -> red
-        const [r, g, b] = heatmapColor(t);
-        imageData.data[base] = r;
-        imageData.data[base + 1] = g;
-        imageData.data[base + 2] = b;
-        imageData.data[base + 3] = 255;
-      } else {
-        imageData.data[base] = 255;
-        imageData.data[base + 1] = 255;
-        imageData.data[base + 2] = 255;
-        imageData.data[base + 3] = 255;
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-  }, [inverseDT, bitmap, w, h]);
-
-  const { width: dw, height: dh } = fitSize(w, h, 600);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="max-w-full max-h-full border border-gray-200"
-      style={{ imageRendering: 'pixelated', width: dw, height: dh }}
-    />
-  );
-}
-
-function TracedView({ result }: { result: PipelineResult }) {
-  const { polylines, bitmapWidth: w, bitmapHeight: h } = result;
-  const { width: dw, height: dh } = fitSize(w, h, 600);
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="max-w-full max-h-full border border-gray-200" style={{ width: dw, height: dh }}>
-      <rect width={w} height={h} fill="white" />
-      {polylines.map((pl, i) => {
-        const color = STROKE_COLORS[i % STROKE_COLORS.length]!;
-        if (pl.length === 1) {
-          return <circle key={i} cx={pl[0]!.x} cy={pl[0]!.y} r={2} fill={color} />;
-        }
-        const d = pl.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-        return <path key={i} d={d} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />;
-      })}
-      {/* Mark endpoints */}
-      {polylines.map((pl, i) => {
-        const color = STROKE_COLORS[i % STROKE_COLORS.length]!;
-        const start = pl[0]!;
-        return <circle key={`start-${i}`} cx={start.x} cy={start.y} r={3} fill={color} opacity={0.8} />;
-      })}
-    </svg>
-  );
-}
-
-function StrokesView({ result }: { result: PipelineResult }) {
-  const { strokes, bitmapWidth: w, bitmapHeight: h, lineCap } = result;
-  const { width: dw, height: dh } = fitSize(w, h, 600);
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="max-w-full max-h-full border border-gray-200" style={{ width: dw, height: dh }}>
-      <rect width={w} height={h} fill="white" />
-      {strokes.map((stroke, i) => {
-        const color = STROKE_COLORS[i % STROKE_COLORS.length]!;
-        const avgWidth = stroke.points.reduce((s, p) => s + p.width, 0) / stroke.points.length;
-
-        if (stroke.points.length === 1) {
-          const p = stroke.points[0]!;
-          return lineCap === 'round' ? (
-            <circle key={i} cx={p.x} cy={p.y} r={Math.max(avgWidth / 2, 1)} fill={color} opacity={0.7} />
-          ) : (
-            <rect
-              key={i}
-              x={p.x - Math.max(avgWidth / 2, 1)}
-              y={p.y - Math.max(avgWidth / 2, 1)}
-              width={Math.max(avgWidth, 2)}
-              height={Math.max(avgWidth, 2)}
-              fill={color}
-              opacity={0.7}
-            />
-          );
-        }
-
-        const d = stroke.points.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-        return (
-          <g key={i}>
-            <path
-              d={d}
-              fill="none"
-              stroke={color}
-              strokeWidth={Math.max(avgWidth, 1)}
-              strokeLinecap={lineCap}
-              strokeLinejoin="round"
-              opacity={0.5}
-            />
-            <path d={d} fill="none" stroke={color} strokeWidth={1} strokeLinecap={lineCap} strokeLinejoin="round" />
-            {/* Order label */}
-            <circle cx={stroke.points[0]!.x} cy={stroke.points[0]!.y} r={6} fill={color} />
-            <text
-              x={stroke.points[0]!.x}
-              y={stroke.points[0]!.y + 3.5}
-              textAnchor="middle"
-              fontSize={8}
-              fill="white"
-              fontFamily="sans-serif"
-            >
-              {i + 1}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+  const rendered = renderStage(result, stage as VisualizationStage);
+  if (rendered instanceof Uint8Array) {
+    return <PNGView data={rendered} width={result.bitmapWidth} height={result.bitmapHeight} />;
+  }
+  return <SVGView svg={rendered} />;
 }
 
 function AnimationView({ result, time }: { result: PipelineResult; time: number }) {
@@ -1375,31 +1125,4 @@ async function fetchFontFromCDN(family: string): Promise<ArrayBuffer> {
 function fitSize(w: number, h: number, maxSize: number): { width: number; height: number } {
   const scale = Math.min(maxSize / w, maxSize / h);
   return { width: Math.round(w * scale), height: Math.round(h * scale) };
-}
-
-// --- Color utilities ---
-
-function parseColor(hex: string): [number, number, number] {
-  const r = Number.parseInt(hex.slice(1, 3), 16);
-  const g = Number.parseInt(hex.slice(3, 5), 16);
-  const b = Number.parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
-}
-
-function heatmapColor(t: number): [number, number, number] {
-  // 0 = blue, 0.25 = cyan, 0.5 = green, 0.75 = yellow, 1 = red
-  if (t < 0.25) {
-    const s = t / 0.25;
-    return [0, Math.round(s * 255), 255];
-  }
-  if (t < 0.5) {
-    const s = (t - 0.25) / 0.25;
-    return [0, 255, Math.round((1 - s) * 255)];
-  }
-  if (t < 0.75) {
-    const s = (t - 0.5) / 0.25;
-    return [Math.round(s * 255), 255, 0];
-  }
-  const s = (t - 0.75) / 0.25;
-  return [255, Math.round((1 - s) * 255), 0];
 }
