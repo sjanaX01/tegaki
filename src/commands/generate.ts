@@ -2,15 +2,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { padroneProgress } from 'padrone';
 import * as z from 'zod/v4';
-import { DEFAULT_CHARS, DEFAULT_FONT_FAMILY, DEFAULT_RESOLUTION } from '../constants.ts';
+import { DEFAULT_CHARS, DEFAULT_FONT_FAMILY, DEFAULT_RESOLUTION, SKELETON_METHOD, VORONOI_SAMPLING_INTERVAL } from '../constants.ts';
 import { writeDebugOutput } from '../debug/output.ts';
 import { downloadFont } from '../font/download.ts';
 import { extractGlyph, loadFont } from '../font/parse.ts';
 import { flattenPath } from '../processing/bezier.ts';
 import { rasterize } from '../processing/rasterize.ts';
-import { zhangSuenThin } from '../processing/skeletonize.ts';
+import { skeletonize } from '../processing/skeletonize.ts';
 import { orderStrokes } from '../processing/stroke-order.ts';
 import { traceAndSimplify } from '../processing/trace.ts';
+import { voronoiMedialAxis } from '../processing/voronoi-medial-axis.ts';
 import { computeInverseDistanceTransform } from '../processing/width.ts';
 import type { BBox, FontOutput, Point } from '../types.ts';
 
@@ -107,13 +108,28 @@ export const generateCommand = (c: any) =>
         const subPaths = flattenPath(rawGlyph.commands);
         const pathBBox = computePathBBox(subPaths);
         const raster = rasterize(subPaths, pathBBox, args.resolution);
-        const skeleton = zhangSuenThin(raster.bitmap, raster.width, raster.height);
-        const inverseDT = computeInverseDistanceTransform(raster.bitmap, raster.width, raster.height);
-        const polylines = traceAndSimplify(skeleton, raster.width, raster.height);
-        const strokes = orderStrokes(polylines, inverseDT, raster.width);
+
+        let polylines: Point[][];
+        let inverseDT: Float32Array | null;
+        let voronoiWidths: number[][] | undefined;
+        let skeleton: Uint8Array | null = null;
+
+        if (SKELETON_METHOD === 'voronoi') {
+          const vResult = voronoiMedialAxis(subPaths, pathBBox, raster.transform, raster.width, raster.height, VORONOI_SAMPLING_INTERVAL);
+          polylines = vResult.polylines;
+          voronoiWidths = vResult.widths;
+          inverseDT = null;
+        } else {
+          skeleton = skeletonize(raster.bitmap, raster.width, raster.height);
+          inverseDT = computeInverseDistanceTransform(raster.bitmap, raster.width, raster.height);
+          polylines = traceAndSimplify(skeleton, raster.width, raster.height);
+        }
+
+        const strokes = orderStrokes(polylines, inverseDT, raster.width, 3, voronoiWidths);
 
         if (debugDir) {
-          await writeDebugOutput(debugDir, char, raster, skeleton, polylines, strokes);
+          const debugSkeleton = skeleton ?? new Uint8Array(raster.width * raster.height);
+          await writeDebugOutput(debugDir, char, raster, debugSkeleton, polylines, strokes);
         }
 
         const skeletonFontUnits = polylines.map((pl) => transformPointsToFontUnits(pl, raster.transform));

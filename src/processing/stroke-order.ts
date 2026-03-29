@@ -1,3 +1,4 @@
+import { COMPONENT_SORT_Y_TOLERANCE, ORIENT_X_WEIGHT, POLYLINE_SORT_Y_TOLERANCE } from '../constants.ts';
 import type { Point, Stroke, TimedPoint } from '../types.ts';
 import { getStrokeWidth } from './width.ts';
 
@@ -104,8 +105,8 @@ function orientPolyline(points: Point[]): Point[] {
 
   // Prefer starting from the top (smaller y in pixel coords)
   // If similar y, prefer starting from the left (smaller x)
-  const startScore = start.y - start.x * 0.3;
-  const endScore = end.y - end.x * 0.3;
+  const startScore = start.y - start.x * ORIENT_X_WEIGHT;
+  const endScore = end.y - end.x * ORIENT_X_WEIGHT;
 
   if (endScore < startScore) {
     return [...points].reverse();
@@ -113,7 +114,13 @@ function orientPolyline(points: Point[]): Point[] {
   return points;
 }
 
-export function orderStrokes(polylines: Point[][], inverseDT: Float32Array | null, bitmapWidth: number, connectionThreshold = 3): Stroke[] {
+export function orderStrokes(
+  polylines: Point[][],
+  inverseDT: Float32Array | null,
+  bitmapWidth: number,
+  connectionThreshold = 3,
+  precomputedWidths?: number[][],
+): Stroke[] {
   if (polylines.length === 0) return [];
 
   // Group into connected components
@@ -122,7 +129,7 @@ export function orderStrokes(polylines: Point[][], inverseDT: Float32Array | nul
   // Sort components: top-to-bottom, then left-to-right
   components.sort((a, b) => {
     const yDiff = a.minY - b.minY;
-    if (Math.abs(yDiff) > 5) return yDiff;
+    if (Math.abs(yDiff) > COMPONENT_SORT_Y_TOLERANCE) return yDiff;
     return a.minX - b.minX;
   });
 
@@ -135,7 +142,7 @@ export function orderStrokes(polylines: Point[][], inverseDT: Float32Array | nul
       const aMinY = Math.min(...a.map((p) => p.y));
       const bMinY = Math.min(...b.map((p) => p.y));
       const yDiff = aMinY - bMinY;
-      if (Math.abs(yDiff) > 3) return yDiff;
+      if (Math.abs(yDiff) > POLYLINE_SORT_Y_TOLERANCE) return yDiff;
       const aMinX = Math.min(...a.map((p) => p.x));
       const bMinX = Math.min(...b.map((p) => p.x));
       return aMinX - bMinX;
@@ -145,6 +152,10 @@ export function orderStrokes(polylines: Point[][], inverseDT: Float32Array | nul
       const oriented = orientPolyline(polyline);
       const totalLen = pathLength(oriented);
 
+      // Look up precomputed widths by matching the original polyline reference
+      const origIdx = precomputedWidths ? polylines.indexOf(polyline) : -1;
+      const pWidths = origIdx >= 0 ? precomputedWidths![origIdx] : null;
+
       // Assign t parameter and width
       let cumLen = 0;
       const points: TimedPoint[] = oriented.map((p, i) => {
@@ -152,7 +163,10 @@ export function orderStrokes(polylines: Point[][], inverseDT: Float32Array | nul
           cumLen += dist(oriented[i - 1]!, p);
         }
         const t = totalLen > 0 ? cumLen / totalLen : 0;
-        const width = inverseDT ? getStrokeWidth(p.x, p.y, inverseDT, bitmapWidth) : 1;
+        // Precomputed widths use original point order; check if oriented is reversed
+        const isReversed = oriented !== polyline && oriented[0] !== polyline[0];
+        const widthIdx = isReversed ? oriented.length - 1 - i : i;
+        const width = pWidths ? (pWidths[widthIdx] ?? 1) : inverseDT ? getStrokeWidth(p.x, p.y, inverseDT, bitmapWidth) : 1;
         return { x: p.x, y: p.y, t, width };
       });
 
