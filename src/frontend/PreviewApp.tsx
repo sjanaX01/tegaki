@@ -622,9 +622,7 @@ function StageRenderer({ result, stage, animTime }: { result: PipelineResult; st
 function AnimationView({ result, time }: { result: PipelineResult; time: number }) {
   const { strokesFontUnits, lineCap, bitmapWidth: w, bitmapHeight: h, transform } = result;
 
-  // Derive viewBox from bitmap transform so the aspect ratio exactly matches bitmap-based views.
-  // The rasterizer maps font coords via: bitmapX = (fontX - offsetX) * scaleX
-  // So the font-unit region covered by the bitmap is:
+  // Content-box viewBox: tight fit around rasterized content to match bitmap-based stages
   const vx = transform.offsetX;
   const vy = transform.offsetY;
   const vw = w / transform.scaleX;
@@ -681,61 +679,79 @@ function AnimationView({ result, time }: { result: PipelineResult; time: number 
 }
 
 function FinalView({ result, time }: { result: PipelineResult; time: number }) {
-  const { strokesFontUnits, lineCap, ascender, descender, advanceWidth, bitmapWidth: bw, bitmapHeight: bh } = result;
+  const { strokesFontUnits, lineCap, bitmapWidth: bw, bitmapHeight: bh, transform, ascender, descender, advanceWidth } = result;
 
-  // Use the production viewBox: full em-square, font coordinates
-  const vx = 0;
-  const vy = -ascender;
-  const vw = advanceWidth;
-  const vh = ascender - descender;
-  // Display size derived from bitmap dimensions to match other views
+  // Container matches the content-box display size (same as bitmap-based stages)
   const { width: dw, height: dh } = fitSize(bw, bh, 600);
 
+  // Em-square viewBox (matches production SVG output)
+  const ew = advanceWidth;
+  const eh = ascender - descender;
+
+  // Content-box in font units
+  const cx = transform.offsetX;
+  const cy = transform.offsetY;
+  const cw = bw / transform.scaleX;
+  const ch = bh / transform.scaleY;
+
+  // Scale the SVG so the content region fills exactly (dw, dh)
+  const svgW = (dw * ew) / cw;
+  const svgH = (dh * eh) / ch;
+
+  // Offset to align the content region with the container's top-left
+  const ox = (cx * dw) / cw;
+  const oy = ((cy + ascender) * dh) / ch;
+
   return (
-    <svg viewBox={`${vx} ${vy} ${vw} ${vh}`} className="border border-gray-200" style={{ width: dw, height: dh }}>
-      <rect x={vx} y={vy} width={vw} height={vh} fill="white" />
-      {strokesFontUnits.map((stroke, i) => {
-        const avgWidth = stroke.points.reduce((s, p) => s + p.width, 0) / stroke.points.length;
-        const localTime = time - stroke.delay;
+    <div className="border border-gray-200 overflow-hidden relative" style={{ width: dw, height: dh }}>
+      <svg
+        viewBox={`0 ${-ascender} ${ew} ${eh}`}
+        style={{ position: 'absolute', left: -ox, top: -oy, width: svgW, height: svgH, overflow: 'visible' }}
+      >
+        <rect x={0} y={-ascender} width={ew} height={eh} fill="white" />
+        {strokesFontUnits.map((stroke, i) => {
+          const avgWidth = stroke.points.reduce((s, p) => s + p.width, 0) / stroke.points.length;
+          const localTime = time - stroke.delay;
 
-        if (localTime < 0) return null;
+          if (localTime < 0) return null;
 
-        if (stroke.points.length === 1) {
-          const p = stroke.points[0]!;
-          const size = Math.max(avgWidth, 0.5);
-          return lineCap === 'round' ? (
-            <circle key={i} cx={p.x} cy={p.y} r={size / 2} fill="currentColor" />
-          ) : (
-            <rect key={i} x={p.x - size / 2} y={p.y - size / 2} width={size} height={size} fill="currentColor" />
+          if (stroke.points.length === 1) {
+            const p = stroke.points[0]!;
+            const size = Math.max(avgWidth, 0.5);
+            return lineCap === 'round' ? (
+              <circle key={i} cx={p.x} cy={p.y} r={size / 2} fill="currentColor" />
+            ) : (
+              <rect key={i} x={p.x - size / 2} y={p.y - size / 2} width={size} height={size} fill="currentColor" />
+            );
+          }
+
+          const d = stroke.points.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+          let pathLen = 0;
+          for (let j = 1; j < stroke.points.length; j++) {
+            const dx = stroke.points[j]!.x - stroke.points[j - 1]!.x;
+            const dy = stroke.points[j]!.y - stroke.points[j - 1]!.y;
+            pathLen += Math.sqrt(dx * dx + dy * dy);
+          }
+
+          const progress = stroke.animationDuration > 0 ? Math.min(localTime / stroke.animationDuration, 1) : 1;
+          const dashOffset = pathLen * (1 - progress);
+
+          return (
+            <path
+              key={i}
+              d={d}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={Math.max(avgWidth, 0.5)}
+              strokeLinecap={lineCap}
+              strokeLinejoin="round"
+              strokeDasharray={pathLen}
+              strokeDashoffset={dashOffset}
+            />
           );
-        }
-
-        const d = stroke.points.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-        let pathLen = 0;
-        for (let j = 1; j < stroke.points.length; j++) {
-          const dx = stroke.points[j]!.x - stroke.points[j - 1]!.x;
-          const dy = stroke.points[j]!.y - stroke.points[j - 1]!.y;
-          pathLen += Math.sqrt(dx * dx + dy * dy);
-        }
-
-        const progress = stroke.animationDuration > 0 ? Math.min(localTime / stroke.animationDuration, 1) : 1;
-        const dashOffset = pathLen * (1 - progress);
-
-        return (
-          <path
-            key={i}
-            d={d}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={Math.max(avgWidth, 0.5)}
-            strokeLinecap={lineCap}
-            strokeLinejoin="round"
-            strokeDasharray={pathLen}
-            strokeDashoffset={dashOffset}
-          />
-        );
-      })}
-    </svg>
+        })}
+      </svg>
+    </div>
   );
 }
 
