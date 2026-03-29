@@ -1,12 +1,12 @@
 {
-  "name": "handy-text",
+  "name": "tegaki",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Create hand-written text animations",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/KurtGokhan/handy-text.git"
+    "url": "git+ssh://git@github.com/KurtGokhan/tegaki.git"
   },
   "bin": {
     "myapp": "./index.ts"

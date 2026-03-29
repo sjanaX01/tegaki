@@ -28,7 +28,7 @@ export async function downloadFont(family: string, options: { cacheDir?: string;
   const cssResponse = await fetch(cssUrl, {
     headers: {
       // A non-browser User-Agent triggers .ttf responses from Google Fonts
-      'User-Agent': 'handy-text/1.0',
+      'User-Agent': 'tegaki/1.0',
     },
   });
 

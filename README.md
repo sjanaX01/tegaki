@@ -1,4 +1,4 @@
-# Handy Text
+# Tegaki
 
 CLI tool that generates glyph data for handwriting animation. It downloads fonts from Google Fonts, extracts glyph outlines, computes single-stroke skeletons, and determines natural stroke order for animation.
 
@@ -21,7 +21,7 @@ bun start generate "Caveat" -o output/caveat.json -r 300
 ## Usage
 
 ```
-Usage: handy-text generate [family] [options]
+Usage: tegaki generate [family] [options]
 
 Arguments:
   family                Google Fonts family name (default: Caveat)

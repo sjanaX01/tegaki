@@ -1,4 +1,4 @@
-# handy-text
+# Tegaki
 
 CLI tool that generates glyph data for handwriting animation from Google Fonts.
 

@@ -1,7 +1,7 @@
 import { createPadrone } from 'padrone';
 import { generateCommand } from './commands/generate.ts';
 
-export const program = createPadrone('handy-text')
+export const program = createPadrone('tegaki')
   .configure({
     description: 'Generate glyph data for handwriting animation',
   })
