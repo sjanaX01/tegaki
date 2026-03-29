@@ -6,8 +6,8 @@ type Message = {
   content: string;
 };
 
-const DEFAULT_SPEED = 1;
-const CATCH_UP_BASE = 0.2;
+const DEFAULT_SPEED = 4;
+const CATCH_UP_BASE = 0;
 
 function StreamingHandwriter({ text, speed = DEFAULT_SPEED, ...props }: { text: string; speed?: number } & ComponentProps<'div'>) {
   const [displayTime, setDisplayTime] = useState(0);
@@ -139,22 +139,69 @@ export function ChatScreenDemo() {
   );
 
   return (
-    <div className="flex flex-col h-dvh w-full">
-      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300 font-semibold text-sm md:text-base">Chat</div>
+    <div
+      className="flex flex-col h-dvh w-full"
+      style={{
+        background: 'linear-gradient(170deg, #f0f1f3 0%, #e8e9ec 40%, #e3e4e7 100%)',
+        fontFamily: 'Caveat',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-6 py-4 text-center tracking-widest uppercase text-xs"
+        style={{
+          color: '#6b6e78',
+          borderBottom: '1px solid #c5c7cc',
+          background: 'linear-gradient(180deg, #ececef 0%, #e7e8eb 100%)',
+          boxShadow: '0 1px 3px rgba(80, 82, 90, 0.06)',
+          letterSpacing: '0.25em',
+        }}
+      >
+        Magic note
+      </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:px-8 flex flex-col gap-3">
-        {messages.length === 0 && <p className="text-gray-400 text-sm md:text-base text-center mt-8">Send a message to start chatting</p>}
+      {/* Messages area */}
+      <div
+        className="flex-1 overflow-y-auto flex flex-col ruled-lines"
+        style={{
+          lineHeight: '1lh',
+          padding: '0.5lh 1.5rem',
+          gap: '0.5lh',
+        }}
+      >
+        {messages.length === 0 && (
+          <p className="text-center mt-12 text-sm italic" style={{ color: '#9a9ca5' }}>
+            Dip your pen and begin writing...
+          </p>
+        )}
 
-        <div className="w-full max-w-3xl mx-auto flex flex-col gap-3">
+        <div className="w-full max-w-3xl mx-auto flex flex-col" style={{ gap: '1lh' }}>
           {messages.map((msg, i) => (
             <div key={`${msg.role}-${i}`} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' ? (
                 <StreamingHandwriter
-                  className="max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-lg text-sm md:text-base bg-gray-200 text-gray-900"
+                  className="max-w-[85%] md:max-w-[75%] text-lg md:text-base leading-[inherit]"
                   text={msg.content}
+                  style={{
+                    color: '#151820',
+                    background: 'linear-gradient(135deg, rgba(252,252,254,0.60) 0%, rgba(245,245,248,0.40) 100%)',
+                    borderLeft: '2px solid rgba(80, 82, 95, 0.2)',
+                    borderRadius: '2px',
+                    padding: '0.5lh 1.25rem',
+                  }}
                 />
               ) : (
-                <div className="max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-lg text-sm md:text-base whitespace-pre-wrap bg-blue-600 text-white">
+                <div
+                  className="max-w-[85%] md:max-w-[75%] text-lg md:text-base leading-[inherit] whitespace-pre-wrap italic"
+                  style={{
+                    fontFamily: 'Caveat',
+                    color: '#1e2030',
+                    background: 'linear-gradient(135deg, rgba(228, 229, 234, 0.60) 0%, rgba(222, 223, 228, 0.40) 100%)',
+                    borderRight: '2px solid rgba(80, 82, 95, 0.2)',
+                    borderRadius: '2px',
+                    padding: '0.5lh 1.25rem',
+                  }}
+                >
                   {msg.content}
                 </div>
               )}
@@ -163,7 +210,9 @@ export function ChatScreenDemo() {
 
           {loading && messages[messages.length - 1]?.content === '' && (
             <div className="flex justify-start">
-              <div className="bg-gray-200 text-gray-500 px-3 py-2 rounded-lg text-sm">Thinking...</div>
+              <div className="text-sm italic" style={{ color: '#9a9ca5', padding: '0.5lh 1.25rem' }}>
+                The pen stirs...
+              </div>
             </div>
           )}
         </div>
@@ -171,22 +220,61 @@ export function ChatScreenDemo() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-gray-300 p-3 md:px-8">
-        <div className="w-full max-w-3xl mx-auto flex gap-2">
-          <textarea
-            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm md:text-base resize-none"
-            rows={1}
-            placeholder="Type a message..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-          />
+      {/* Input area */}
+      <div
+        className="p-4 md:px-12"
+        style={{
+          borderTop: '1px solid #c5c7cc',
+          background: 'linear-gradient(0deg, #e7e8eb 0%, #ececef 100%)',
+          boxShadow: '0 -2px 6px rgba(80, 82, 90, 0.05)',
+        }}
+      >
+        <div className="w-full max-w-3xl mx-auto flex gap-3 items-end">
+          {/* Jagged torn-paper textarea wrapper */}
+          <div className="flex-1 relative">
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+              <defs>
+                <filter id="paper-rough" x="-2%" y="-2%" width="104%" height="104%">
+                  <feTurbulence type="turbulence" baseFrequency="0.04" numOctaves="4" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+              </defs>
+            </svg>
+            <textarea
+              className="w-full px-4 py-3 text-md md:text-base resize-none outline-none"
+              rows={1}
+              placeholder="Ask something..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+              style={{
+                background: 'rgba(252, 252, 253, 0.85)',
+                border: 'none',
+                color: '#151820',
+                fontFamily: 'Caveat',
+                fontStyle: 'italic',
+                boxShadow: '1px 2px 6px rgba(80, 82, 90, 0.1)',
+                filter: 'url(#paper-rough)',
+              }}
+            />
+          </div>
+          {/* Sticker button */}
           <button
             type="button"
-            className="px-4 py-2 bg-blue-600 text-white rounded text-sm md:text-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-3 text-sm tracking-wider uppercase cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95"
             onClick={sendMessage}
             disabled={loading || !input.trim()}
+            style={{
+              background: loading || !input.trim() ? '#d8d9dc' : '#2a2d38',
+              color: loading || !input.trim() ? '#9a9ca5' : '#f5f5f7',
+              border: 'none',
+              borderRadius: '4px',
+              letterSpacing: '0.15em',
+              cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+              transform: 'rotate(-2deg) translateY(-6px)',
+              boxShadow: '2px 3px 0px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.1)',
+            }}
           >
             Send
           </button>

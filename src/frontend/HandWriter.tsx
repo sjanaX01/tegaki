@@ -87,14 +87,10 @@ function computeTextLayout(text: string, fontFamily: string, fontSize: number, m
       indices.push(charOffset + i);
     }
     charOffset += line.text.length;
-    while (charOffset < text.length) {
-      if (text[charOffset] === '\n') {
-        // Include newline in this line but don't render it
-        indices.push(charOffset);
-        charOffset++;
-        break;
-      }
-      break;
+    // Consume the newline that caused this line break
+    if (charOffset < text.length && text[charOffset] === '\n') {
+      indices.push(charOffset);
+      charOffset++;
     }
     lines.push(indices);
   }
@@ -245,20 +241,33 @@ export function Handwriter({ text, time, ...props }: { text: string; time: numbe
   };
 
   const lineElements = layout
-    ? layout.lines.map((lineIndices, lineIdx) => (
-        <div className="flex flex-row" key={lineIdx}>
-          {lineIndices.map(renderGlyph)}
-        </div>
-      ))
+    ? layout.lines.map((lineIndices, lineIdx) => {
+        const isEmpty = lineIndices.every((i) => characters[i] === '\n');
+        return (
+          <div className="flex flex-row" style={isEmpty ? { height: '1lh' } : undefined} key={lineIdx}>
+            {lineIndices.map(renderGlyph)}
+          </div>
+        );
+      })
     : // Fallback before layout is ready: single line
       characters.length > 0 && <div className="flex flex-row">{characters.map((_, i) => renderGlyph(i))}</div>;
 
   return (
-    <div ref={rootRef} {...props} className={twJoin('grid', props.className)} style={{ ...props.style, maxWidth: '100%' }}>
-      <div className="[grid-area:1/1] pointer-events-none">{lineElements}</div>
+    <div
+      ref={rootRef}
+      {...props}
+      className={twJoin('relative grid', props.className)}
+      style={{
+        ...props.style,
+        maxWidth: '100%',
+        width: 'auto',
+        height: 'auto',
+      }}
+    >
+      <div className="[grid-area:1/1] absolute inset-0 pointer-events-none">{lineElements}</div>
 
       <div
-        className="[grid-area:1/1] select-auto text-transparent whitespace-pre-wrap wrap-break-word"
+        className="[grid-area:1/1] select-auto text-transparent whitespace-pre-wrap wrap-break-word pr-[1px]"
         style={{ fontFamily: fontFamily ?? undefined }}
       >
         {text}
