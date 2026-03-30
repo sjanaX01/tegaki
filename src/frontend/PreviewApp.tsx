@@ -857,29 +857,57 @@ function TextPreview({
   const [fontSizePx, setFontSizePx] = useState(128);
   const [showOverlay, setShowOverlay] = useState(false);
 
+  // Synchronous font change detection — reset all font-dependent state BEFORE rendering
+  // so TegakiRenderer never sees stale fontReady, displayTime, or glyph components.
+  const componentCache = useRef(new Map<string, React.FC<SVGProps<SVGSVGElement>>>());
+  const prevFontInfoForReset = useRef(fontInfo);
+  if (prevFontInfoForReset.current !== fontInfo) {
+    prevFontInfoForReset.current = fontInfo;
+    componentCache.current.clear();
+    if (fontReady) setFontReady(false);
+    timeRef.current = 0;
+    if (displayTime !== 0) setDisplayTime(0);
+    if (!playing) setPlaying(true);
+  }
+
   // Register font face (stable — only changes when font changes, not on text edits)
   const fontUrl = useMemo(() => {
     if (!fontBuffer) return null;
     return URL.createObjectURL(new Blob([fontBuffer], { type: 'font/ttf' }));
   }, [fontBuffer]);
 
+  // Revoke old blob URL when fontBuffer changes
+  const prevFontUrl = useRef(fontUrl);
+  useEffect(() => {
+    const prev = prevFontUrl.current;
+    prevFontUrl.current = fontUrl;
+    if (prev && prev !== fontUrl) URL.revokeObjectURL(prev);
+    return () => {
+      if (fontUrl) URL.revokeObjectURL(fontUrl);
+    };
+  }, [fontUrl]);
+
   useEffect(() => {
     if (!fontInfo || !fontUrl) {
       setFontReady(false);
       return;
     }
-    setFontReady(false);
     const face = new FontFace(fontInfo.family, `url(${fontUrl})`, {
       featureSettings: '"calt" 0, "liga" 0',
     });
+    let cancelled = false;
     face.load().then((loaded) => {
+      if (cancelled) return;
       document.fonts.add(loaded);
       setFontReady(true);
     });
+    return () => {
+      cancelled = true;
+      document.fonts.delete(face);
+    };
   }, [fontInfo, fontUrl]);
 
   // Process glyphs and build a FontBundle (glyph components are cached via resultsCache + componentCache)
-  const componentCache = useRef(new Map<string, React.FC<SVGProps<SVGSVGElement>>>());
   const fontBundle = useMemo(() => {
     if (!fontInfo || !fontUrl) return null;
 

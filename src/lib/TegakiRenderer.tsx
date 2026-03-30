@@ -145,6 +145,13 @@ export function TegakiRenderer({
   const timeline = useMemo(() => computeTimeline(text, font), [text, font]);
   const svgRefs = useRef(new Map<number, SVGSVGElement>());
 
+  // Clear stale SVG refs when font changes so useLayoutEffect doesn't set time on old elements
+  const prevFontRef = useRef(font);
+  if (prevFontRef.current !== font) {
+    prevFontRef.current = font;
+    svgRefs.current.clear();
+  }
+
   // Observe container size for line wrapping
   useEffect(() => {
     const el = rootRef.current;
