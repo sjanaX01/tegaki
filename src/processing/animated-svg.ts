@@ -52,6 +52,10 @@ export function glyphToAnimatedSVG(
     const avgWidth = stroke.points.reduce((s, p) => s + p.width, 0) / stroke.points.length;
     const begin = `${stroke.delay.toFixed(3)}s`;
 
+    // Pad dasharray/dashoffset by stroke width to prevent round linecap
+    // from showing a dot at the path end when fully hidden (dash wraps around).
+    const dashLen = pathLen + avgWidth;
+
     if (pathLen === 0) {
       // Single-point stroke (dot): render as a shape that fades in
       const p = stroke.points[0]!;
@@ -61,9 +65,9 @@ export function glyphToAnimatedSVG(
   </${lineCap === 'round' ? 'circle' : 'rect'}>`);
     } else {
       elements.push(`  <path d="${d}" fill="none" stroke="currentColor" stroke-width="${Math.max(avgWidth, 0.5).toFixed(1)}" stroke-linecap="${lineCap}" stroke-linejoin="round"
-    stroke-dasharray="${pathLen.toFixed(1)}" stroke-dashoffset="${pathLen.toFixed(1)}" opacity="0">
+    stroke-dasharray="${dashLen.toFixed(1)}" stroke-dashoffset="${dashLen.toFixed(1)}" opacity="0">
     <animate attributeName="opacity" from="0" to="1" dur="0.001s" begin="${begin}" fill="freeze"/>
-    <animate attributeName="stroke-dashoffset" from="${pathLen.toFixed(1)}" to="0" dur="${stroke.animationDuration.toFixed(3)}s" begin="${begin}" fill="freeze"/>
+    <animate attributeName="stroke-dashoffset" from="${dashLen.toFixed(1)}" to="0" dur="${stroke.animationDuration.toFixed(3)}s" begin="${begin}" fill="freeze"/>
   </path>`);
     }
   }

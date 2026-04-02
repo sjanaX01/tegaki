@@ -711,7 +711,8 @@ function AnimationView({ result, time }: { result: PipelineResult; time: number 
         }
 
         const progress = stroke.animationDuration > 0 ? Math.min(localTime / stroke.animationDuration, 1) : 1;
-        const dashOffset = pathLen * (1 - progress);
+        const dashLen = pathLen + avgWidth;
+        const dashOffset = dashLen * (1 - progress);
 
         return (
           <path
@@ -722,7 +723,7 @@ function AnimationView({ result, time }: { result: PipelineResult; time: number 
             strokeWidth={Math.max(avgWidth, 0.5)}
             strokeLinecap={lineCap}
             strokeLinejoin="round"
-            strokeDasharray={pathLen}
+            strokeDasharray={dashLen}
             strokeDashoffset={dashOffset}
           />
         );
@@ -787,7 +788,8 @@ function FinalView({ result, time }: { result: PipelineResult; time: number }) {
           }
 
           const progress = stroke.animationDuration > 0 ? Math.min(localTime / stroke.animationDuration, 1) : 1;
-          const dashOffset = pathLen * (1 - progress);
+          const dashLen = pathLen + avgWidth;
+          const dashOffset = dashLen * (1 - progress);
 
           return (
             <path
@@ -798,7 +800,7 @@ function FinalView({ result, time }: { result: PipelineResult; time: number }) {
               strokeWidth={Math.max(avgWidth, 0.5)}
               strokeLinecap={lineCap}
               strokeLinejoin="round"
-              strokeDasharray={pathLen}
+              strokeDasharray={dashLen}
               strokeDashoffset={dashOffset}
             />
           );
