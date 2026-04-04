@@ -465,13 +465,21 @@ export function TegakiRenderer({
             font.lineCap,
             color,
           );
+        } else if (!entry.hasSvg && currentTime >= entry.offset) {
+          ctx.save();
+          ctx.font = `${fontSize}px ${fontFamily}`;
+          ctx.fillStyle = color;
+          ctx.textBaseline = 'alphabetic';
+          const baseline = y + halfLeading + (font.ascender / font.unitsPerEm) * fontSize;
+          ctx.fillText(char, x, baseline);
+          ctx.restore();
         }
 
         x += (charWidth + kerning) * fontSize;
       }
       y += lineHeight;
     }
-  }, [mode, currentTime, timeline, layout, font, fontSize, lineHeight, resolvedText, emHeight]);
+  }, [mode, currentTime, timeline, layout, font, fontFamily, fontSize, lineHeight, resolvedText, emHeight]);
 
   // --- Rendering ---
 
