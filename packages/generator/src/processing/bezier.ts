@@ -1,5 +1,5 @@
+import type { PathCommand, Point } from 'tegaki';
 import { BEZIER_TOLERANCE } from '../constants.ts';
-import type { PathCommand, Point } from '../types.ts';
 
 function distSq(a: Point, b: Point): number {
   const dx = a.x - b.x;

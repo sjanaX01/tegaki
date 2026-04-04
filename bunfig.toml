@@ -1,11 +1,5 @@
-[run]
-bun = true
-
 [install]
 linker = "isolated"
 
 [test]
 onlyFailures = true
-
-[serve.static]
-plugins = ["bun-plugin-tailwind"]

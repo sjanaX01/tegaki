@@ -1,6 +1,6 @@
 # Tegaki
 
-CLI tool that generates glyph data for handwriting animation from Google Fonts.
+Monorepo for generating and rendering handwriting animations from Google Fonts.
 
 ## Tech Stack
 
@@ -10,14 +10,21 @@ CLI tool that generates glyph data for handwriting animation from Google Fonts.
 - **Font parsing**: opentype.js
 - **Linter/Formatter**: Biome (2-space indent, single quotes, 140 line width)
 - **Testing**: Bun's built-in test runner
+- **Monorepo**: Bun workspaces
+
+## Packages
+
+- `packages/renderer` (`tegaki`) — Published npm package. React component for rendering animated handwriting.
+- `packages/generator` (`@tegaki/generator`) — CLI tool that generates glyph data from fonts.
+- `packages/website` (`@tegaki/website`) — Preview app and chat demo.
 
 ## Commands
 
 ```bash
-bun start          # Run the CLI
-bun dev            # Watch mode
-bun test           # Run tests
-bun typecheck      # TypeScript checks
+bun start          # Run the CLI (generator)
+bun dev            # Watch mode (website)
+bun test           # Run tests (all packages)
+bun typecheck      # TypeScript checks (all packages)
 bun check          # Biome lint + format check
 bun fix            # Biome auto-fix
 bun checks         # All checks: lint + format + typecheck + tests
@@ -27,13 +34,19 @@ Use these commands instead of custom commands as much as possible. It's crucial 
 
 ## Architecture
 
-### CLI Entry Point
+### Renderer (`packages/renderer`)
 
-`src/index.ts` uses Padrone to define the CLI. Commands are defined in `src/commands/` and passed as builder callbacks to `.command()`.
+The `tegaki` npm package exports `TegakiRenderer` (a React component) and shared types (`Point`, `TimedPoint`, `BBox`, `Stroke`, `GlyphData`, `FontOutput`, `TegakiBundle`, etc.).
 
-The `generate` command is the main feature. It orchestrates a pipeline that processes each glyph through several stages.
+- `src/index.ts` — Public API entry point
+- `src/lib/TegakiRenderer.tsx` — React component with text layout, animation timeline, and SVG time sync
+- `src/types.ts` — Shared types used across all packages
 
-### Pipeline (per glyph)
+### Generator (`packages/generator`)
+
+CLI entry point uses Padrone. The `generate` command orchestrates a pipeline that processes each glyph through several stages.
+
+#### Pipeline (per glyph)
 
 ```
 Font download -> Parse (opentype.js) -> Flatten beziers -> Rasterize -> Skeletonize -> Trace -> Compute width -> Order strokes -> JSON output
@@ -47,21 +60,15 @@ Font download -> Parse (opentype.js) -> Flatten beziers -> Rasterize -> Skeleton
 6. **Width** (`src/processing/width.ts`): Distance transform computes stroke width (diameter) at each skeleton point
 7. **Stroke order** (`src/processing/stroke-order.ts`): Groups polylines into connected components, sorts top-to-bottom/left-to-right, orients strokes, assigns `t` parameter (0-1 animation progress)
 
-### Key Design Decisions
-
-- **Pure TypeScript processing**: All image processing (rasterizer, Zhang-Suen, distance transform, RDP) is implemented from scratch to avoid native addon dependencies (no canvas, no sharp).
-- **Coordinate system mismatch**: opentype.js `glyph.getPath()` outputs screen coordinates (y-down) while `glyph.getBoundingBox()` returns font coordinates (y-up). The pipeline computes bounding boxes from actual path points, not from opentype's bbox.
-- **Spur pruning**: The Zhang-Suen skeleton produces noisy spur branches at thick stroke endpoints. These are pruned proportionally to bitmap size (8% of resolution, capped at 10px). If all polylines would be pruned (tiny glyphs like `.`), the longest one is kept.
-- **Font caching**: Downloaded .ttf files are cached in `.cache/fonts/`. The Google Fonts CSS endpoint is fetched with a non-browser User-Agent to get .ttf URLs (not woff2).
-
-### File Structure
+#### File Structure
 
 ```
-src/
-  index.ts                    # CLI entry point (Padrone)
-  index.test.ts               # Tests
-  types.ts                    # Shared types: Point, TimedPoint, BBox, Stroke, GlyphData, FontOutput, PathCommand
+packages/generator/src/
+  index.ts                    # Public API exports
   constants.ts                # Defaults: resolution (400), chars, font family (Caveat), tolerances
+  cli/
+    index.ts                  # CLI entry point (Padrone)
+    index.test.ts             # Tests
   commands/
     generate.ts               # Generate command: orchestrates full pipeline
   font/
@@ -74,7 +81,38 @@ src/
     trace.ts                  # Skeleton pixel tracing + RDP simplification + spur pruning
     width.ts                  # Distance transform for stroke width
     stroke-order.ts           # Connected component grouping + heuristic ordering
+    animated-svg.ts           # Convert strokes to animated SVG + TSX
+    visualize.ts              # Debug visualization (bitmap, skeleton, traces)
+    voronoi-medial-axis.ts    # Voronoi-based skeletonization alternative
+    png.ts                    # PNG encoding
+  debug/
+    output.ts                 # Write debug visualization files
 ```
+
+### Website (`packages/website`)
+
+Preview app for interactive glyph inspection and a chat demo with streaming animation.
+
+```
+packages/website/src/
+  server.ts                   # Bun web server
+  frontend/
+    preview-main.tsx          # Entry point for preview
+    preview.html              # HTML shell for preview
+    PreviewApp.tsx            # Glyph inspector + text preview
+    ChatScreenDemo.tsx        # Chat demo with streaming animation
+    chat.html                 # HTML shell for chat
+    font.ts                   # Pre-generated font bundle import
+    url-state.ts              # URL state persistence
+    style.css                 # Tailwind styles
+```
+
+### Key Design Decisions
+
+- **Pure TypeScript processing**: All image processing (rasterizer, Zhang-Suen, distance transform, RDP) is implemented from scratch to avoid native addon dependencies (no canvas, no sharp).
+- **Coordinate system mismatch**: opentype.js `glyph.getPath()` outputs screen coordinates (y-down) while `glyph.getBoundingBox()` returns font coordinates (y-up). The pipeline computes bounding boxes from actual path points, not from opentype's bbox.
+- **Spur pruning**: The Zhang-Suen skeleton produces noisy spur branches at thick stroke endpoints. These are pruned proportionally to bitmap size (8% of resolution, capped at 10px). If all polylines would be pruned (tiny glyphs like `.`), the longest one is kept.
+- **Font caching**: Downloaded .ttf files are cached in `.cache/fonts/`. The Google Fonts CSS endpoint is fetched with a non-browser User-Agent to get .ttf URLs (not woff2).
 
 ### Output Format
 
@@ -105,5 +143,6 @@ Each stroke point has: `x`, `y` (font units), `t` (0-1 animation progress along 
 
 - Padrone command builders use `AnyPadroneBuilder` type (not `PadroneCommandBuilder` which doesn't exist)
 - Biome auto-formats on commit via husky + lint-staged
-- Imports use `.ts` extensions (`import { foo } from './bar.ts'`)
+- Imports use `.ts` extensions for local imports (`import { foo } from './bar.ts'`), package imports use bare specifiers (`import { foo } from 'tegaki'`)
 - Zod is imported as `import * as z from 'zod/v4'` (not default import)
+- Cross-package imports use the package name: `tegaki` for renderer types/components, `@tegaki/generator` for generator exports

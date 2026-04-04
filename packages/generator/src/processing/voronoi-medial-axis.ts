@@ -1,5 +1,5 @@
 import { Delaunay } from 'd3-delaunay';
-import type { BBox, Point } from '../types.ts';
+import type { BBox, Point } from 'tegaki';
 
 /**
  * Voronoi-based medial axis extraction.

@@ -1,7 +1,6 @@
 import { type ComponentProps, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { computeTimeline, TegakiRenderer } from '../lib/TegakiRenderer.tsx';
-import type { TegakiBundle } from '../types.ts';
+import { computeTimeline, type TegakiBundle, TegakiRenderer } from 'tegaki';
 import font from './font.ts';
 
 type Message = {
@@ -53,7 +52,8 @@ function StreamingTegaki({
     return () => cancelAnimationFrame(raf);
   }, [speed]);
 
-  return <TegakiRenderer text={text} time={displayTime} font={font} {...props} />;
+  const { children: _, ...rest } = props;
+  return <TegakiRenderer text={text} time={displayTime} font={font} {...rest} />;
 }
 
 export function ChatScreenDemo({ font }: { font: TegakiBundle }) {

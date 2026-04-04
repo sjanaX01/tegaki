@@ -1,3 +1,4 @@
+import type { Point } from 'tegaki';
 import {
   JUNCTION_ALIGNMENT_COS,
   JUNCTION_CROSSING_COS,
@@ -9,7 +10,6 @@ import {
   TRACE_CURVATURE_BIAS,
   TRACE_LOOKBACK,
 } from '../constants.ts';
-import type { Point } from '../types.ts';
 
 // 8-connected neighbor offsets
 const DX = [0, 1, 1, 1, 0, -1, -1, -1];

@@ -1,4 +1,5 @@
 import opentype from 'opentype.js';
+import type { BBox, FontOutput, LineCap, Point, Stroke } from 'tegaki';
 import * as z from 'zod/v4';
 import {
   DEFAULT_CHARS,
@@ -27,7 +28,6 @@ import { orderStrokes } from '../processing/stroke-order.ts';
 import { traceAndSimplify } from '../processing/trace.ts';
 import { voronoiMedialAxis } from '../processing/voronoi-medial-axis.ts';
 import { computeInverseDistanceTransform } from '../processing/width.ts';
-import type { BBox, FontOutput, LineCap, Point, Stroke } from '../types.ts';
 
 // ── Pipeline types & defaults ──────────────────────────────────────────────
 

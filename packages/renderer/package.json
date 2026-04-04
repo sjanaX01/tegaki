@@ -1,0 +1,55 @@
+{
+  "name": "tegaki",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "React component for rendering animated handwriting from any font",
+  "keywords": [
+    "handwriting",
+    "animation",
+    "svg",
+    "react",
+    "font",
+    "calligraphy",
+    "stroke-order",
+    "text-animation",
+    "writing-animation"
+  ],
+  "homepage": "https://github.com/KurtGokhan/tegaki#readme",
+  "bugs": {
+    "url": "https://github.com/KurtGokhan/tegaki/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/KurtGokhan/tegaki.git",
+    "directory": "packages/renderer"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Gokhan Kurt",
+    "email": "krtgkn@gmail.com",
+    "url": "https://gkurt.com"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "^0.0.2",
+    "tailwind-merge": "^3.3.1"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "typescript": "^6.0.2"
+  }
+}

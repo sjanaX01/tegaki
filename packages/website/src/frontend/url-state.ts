@@ -1,5 +1,4 @@
-import { DEFAULT_OPTIONS, type PipelineOptions } from '../commands/generate.ts';
-import { DEFAULT_CHARS } from '../constants.ts';
+import { DEFAULT_CHARS, DEFAULT_OPTIONS, type PipelineOptions } from '@tegaki/generator';
 
 type Stage =
   | 'outline'

@@ -1,20 +1,21 @@
-import { zipSync } from 'fflate';
-import { forwardRef, type SVGProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type BrowserSkeletonMethod,
   DEFAULT_OPTIONS,
+  EXAMPLE_FONTS,
   extractTegakiBundle,
+  glyphToAnimatedSVG,
   type ParsedFontInfo,
   type PipelineOptions,
   type PipelineResult,
   parseFont,
   processGlyph,
-} from '../commands/generate.ts';
-import { EXAMPLE_FONTS } from '../constants.ts';
-import { computeTimeline, TegakiRenderer } from '../lib/TegakiRenderer.tsx';
-import { glyphToAnimatedSVG } from '../processing/animated-svg.ts';
-import { renderStage, STROKE_COLORS, type VisualizationStage } from '../processing/visualize.ts';
-import type { LineCap, TegakiBundle } from '../types.ts';
+  renderStage,
+  STROKE_COLORS,
+  type VisualizationStage,
+} from '@tegaki/generator';
+import { zipSync } from 'fflate';
+import { forwardRef, type SVGProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { computeTimeline, type LineCap, type TegakiBundle, TegakiRenderer } from 'tegaki';
 import { parseUrlState, syncUrlState } from './url-state.ts';
 
 type PreviewMode = 'glyph' | 'text';

@@ -1,4 +1,4 @@
-import type { LineCap } from '../types.ts';
+import type { LineCap } from 'tegaki';
 
 export function charToFilename(char: string): string {
   const code = char.codePointAt(0)!;

@@ -1,5 +1,5 @@
+import type { Point, Stroke, TimedPoint } from 'tegaki';
 import { ORIENT_X_WEIGHT } from '../constants.ts';
-import type { Point, Stroke, TimedPoint } from '../types.ts';
 import { getStrokeWidth } from './width.ts';
 
 function dist(a: Point, b: Point): number {

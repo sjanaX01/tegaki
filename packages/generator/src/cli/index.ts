@@ -62,7 +62,6 @@ export const tegakiProgram = createPadrone('tegaki')
         progress?.succeed(`Processed ${bundle.stats.processed} glyphs (${bundle.stats.skipped} skipped). Output: ${outputDir}`);
         return { outputDir, ...bundle.stats };
       }),
-  )
-  .command('serve', (c) => c.action(() => import('../server.ts').then(({ serveTegakiWeb }) => serveTegakiWeb())));
+  );
 
 if (import.meta.main) await tegakiProgram.cli().drain();

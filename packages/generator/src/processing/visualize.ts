@@ -1,5 +1,5 @@
+import type { LineCap, Point } from 'tegaki';
 import type { PipelineResult } from '../commands/generate.ts';
-import type { LineCap, Point } from '../types.ts';
 import { bitmapToPNG, rgbaToPNG } from './png.ts';
 
 export const STROKE_COLORS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990'];

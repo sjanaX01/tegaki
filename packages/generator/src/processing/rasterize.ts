@@ -1,5 +1,5 @@
+import type { BBox, Point } from 'tegaki';
 import { BITMAP_PADDING, DEFAULT_RESOLUTION } from '../constants.ts';
-import type { BBox, Point } from '../types.ts';
 
 export interface RasterResult {
   bitmap: Uint8Array;
