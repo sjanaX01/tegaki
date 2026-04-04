@@ -1,6 +1,6 @@
 import { zipSync } from 'fflate';
 import { forwardRef, type SVGProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeTimeline, type LineCap, type TegakiBundle, TegakiRenderer } from 'tegaki';
+import { computeTimeline, type LineCap, type TegakiBundle, TegakiRenderer, type TimeControlProp } from 'tegaki';
 import {
   type BrowserSkeletonMethod,
   DEFAULT_OPTIONS,
@@ -957,9 +957,12 @@ function TextPreview({
   renderMode: RenderMode;
   onRenderModeChange: (v: RenderMode) => void;
 }) {
+  type TimeMode = 'controlled' | 'uncontrolled' | 'css';
+  const [timeMode, setTimeMode] = useState<TimeMode>('controlled');
   const [playing, setPlaying] = useState(true);
   const [displayTime, setDisplayTime] = useState(0);
   const timeRef = useRef(0);
+  const [loop, setLoop] = useState(false);
   const [fontReady, setFontReady] = useState(false);
 
   // Synchronous font change detection — reset all font-dependent state BEFORE rendering
@@ -1090,9 +1093,9 @@ function TextPreview({
     }
   }, [timeline.totalDuration]);
 
-  // rAF playback loop
+  // rAF playback loop (controlled mode only)
   useEffect(() => {
-    if (!playing || timeline.totalDuration <= 0) return;
+    if (timeMode !== 'controlled' || !playing || timeline.totalDuration <= 0) return;
     let lastTs: number | null = null;
     let raf: number;
     const tick = (ts: number) => {
@@ -1113,7 +1116,11 @@ function TextPreview({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, timeline.totalDuration, animSpeed]);
+  }, [timeMode, playing, timeline.totalDuration, animSpeed]);
+
+  // Compute time prop for TegakiRenderer
+  const timeProp: TimeControlProp =
+    timeMode === 'controlled' ? displayTime : timeMode === 'uncontrolled' ? { mode: 'uncontrolled', speed: animSpeed, loop } : 'css';
 
   return (
     <div className="flex-1 flex flex-col">
@@ -1128,84 +1135,172 @@ function TextPreview({
         />
       </div>
 
-      {/* Rendered text */}
-      <div className="flex-1 flex items-start justify-start p-8 overflow-auto">
-        {!fontInfo && <p className="text-gray-400">Load a font to get started</p>}
-        {fontInfo && !fontReady && <p className="text-gray-500">Loading font...</p>}
-        {fontBundle && fontReady && (
-          <TegakiRenderer
-            className="w-full max-w-2xl"
-            style={{ fontSize: `${fontSizePx}px`, lineHeight: lineHeightRatio }}
-            text={text}
-            time={displayTime}
-            font={fontBundle}
-            mode={renderMode}
-            showOverlay={showOverlay}
-          />
+      {/* Rendered text — CSS mode needs timeline-scope on a common ancestor */}
+      <div
+        className="flex-1 flex flex-col min-h-0"
+        style={timeMode === 'css' ? ({ timelineScope: '--tegaki-scroll' } as React.CSSProperties) : undefined}
+      >
+        {timeMode === 'css' && (
+          <style>
+            {`@keyframes tegaki-scroll-progress {
+              from { --tegaki-progress: 0; }
+              to { --tegaki-progress: 1; }
+            }`}
+          </style>
+        )}
+
+        <div className="flex-1 flex items-start justify-start p-8 overflow-auto">
+          {!fontInfo && <p className="text-gray-400">Load a font to get started</p>}
+          {fontInfo && !fontReady && <p className="text-gray-500">Loading font...</p>}
+          {fontBundle && fontReady && (
+            <TegakiRenderer
+              className="w-full max-w-2xl"
+              style={{
+                fontSize: `${fontSizePx}px`,
+                lineHeight: lineHeightRatio,
+                ...(timeMode === 'css'
+                  ? ({
+                      animation: 'tegaki-scroll-progress linear both',
+                      animationTimeline: '--tegaki-scroll',
+                    } as React.CSSProperties)
+                  : undefined),
+              }}
+              text={text}
+              time={timeProp}
+              font={fontBundle}
+              mode={renderMode}
+              showOverlay={showOverlay}
+            />
+          )}
+        </div>
+
+        {/* CSS mode: horizontal scroll bar */}
+        {timeMode === 'css' && (
+          <div
+            className="border-t border-gray-200 bg-white"
+            style={
+              {
+                overflowX: 'scroll',
+                scrollTimeline: '--tegaki-scroll inline',
+              } as React.CSSProperties
+            }
+          >
+            <div style={{ width: '300%', height: 1 }} />
+          </div>
         )}
       </div>
 
-      {/* Playback controls */}
+      {/* Controls */}
       <div className="border-t border-gray-200 bg-white px-3 py-1.5 flex flex-col gap-1.5">
-        {/* Row 1: playback */}
+        {/* Row 1: time mode + mode-specific controls */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="px-3 py-1 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-100"
-            onClick={() => {
-              if (timeRef.current >= timeline.totalDuration) {
-                timeRef.current = 0;
-                setDisplayTime(0);
-              }
-              setPlaying(!playing);
-            }}
-          >
-            {playing ? 'Pause' : 'Play'}
-          </button>
-          <button
-            type="button"
-            className="px-3 py-1 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-100"
-            onClick={() => {
-              timeRef.current = 0;
-              setDisplayTime(0);
-              setPlaying(false);
-            }}
-          >
-            Reset
-          </button>
-          <span className="text-xs tabular-nums text-gray-500 w-24">
-            {displayTime.toFixed(2)}s / {timeline.totalDuration.toFixed(2)}s
-          </span>
-          <input
-            type="range"
-            className="flex-1 max-w-64"
-            min={0}
-            max={timeline.totalDuration}
-            step={0.01}
-            value={displayTime}
-            onChange={(e) => {
-              const t = Number(e.target.value);
-              timeRef.current = t;
-              setDisplayTime(t);
-              setPlaying(false);
-            }}
-          />
+          {/* Time mode selector */}
+          <div className="flex gap-0.5">
+            {(['controlled', 'uncontrolled', 'css'] as const).map((m) => (
+              <button
+                type="button"
+                key={m}
+                className={`px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
+                  timeMode === m ? 'bg-gray-800 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+                onClick={() => setTimeMode(m)}
+              >
+                {m === 'controlled' ? 'Controlled' : m === 'uncontrolled' ? 'Uncontrolled' : 'CSS'}
+              </button>
+            ))}
+          </div>
 
           <span className="border-l border-gray-200 h-6" />
 
-          <label className="flex items-center gap-1.5 text-xs text-gray-600">
-            Speed
-            <input
-              type="range"
-              className="w-20"
-              min={0.1}
-              max={5}
-              step={0.1}
-              value={animSpeed}
-              onChange={(e) => onAnimSpeedChange(Number(e.target.value))}
-            />
-            <span className="tabular-nums text-gray-400 w-8">{animSpeed}x</span>
-          </label>
+          {/* Controlled mode controls */}
+          {timeMode === 'controlled' && (
+            <>
+              <button
+                type="button"
+                className="px-3 py-1 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-100"
+                onClick={() => {
+                  if (timeRef.current >= timeline.totalDuration) {
+                    timeRef.current = 0;
+                    setDisplayTime(0);
+                  }
+                  setPlaying(!playing);
+                }}
+              >
+                {playing ? 'Pause' : 'Play'}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-100"
+                onClick={() => {
+                  timeRef.current = 0;
+                  setDisplayTime(0);
+                  setPlaying(false);
+                }}
+              >
+                Reset
+              </button>
+              <span className="text-xs tabular-nums text-gray-500 w-24">
+                {displayTime.toFixed(2)}s / {timeline.totalDuration.toFixed(2)}s
+              </span>
+              <input
+                type="range"
+                className="flex-1 max-w-64"
+                min={0}
+                max={timeline.totalDuration}
+                step={0.01}
+                value={displayTime}
+                onChange={(e) => {
+                  const t = Number(e.target.value);
+                  timeRef.current = t;
+                  setDisplayTime(t);
+                  setPlaying(false);
+                }}
+              />
+
+              <span className="border-l border-gray-200 h-6" />
+
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                Speed
+                <input
+                  type="range"
+                  className="w-20"
+                  min={0.1}
+                  max={5}
+                  step={0.1}
+                  value={animSpeed}
+                  onChange={(e) => onAnimSpeedChange(Number(e.target.value))}
+                />
+                <span className="tabular-nums text-gray-400 w-8">{animSpeed}x</span>
+              </label>
+            </>
+          )}
+
+          {/* Uncontrolled mode controls */}
+          {timeMode === 'uncontrolled' && (
+            <>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                Speed
+                <input
+                  type="range"
+                  className="w-20"
+                  min={0.1}
+                  max={5}
+                  step={0.1}
+                  value={animSpeed}
+                  onChange={(e) => onAnimSpeedChange(Number(e.target.value))}
+                />
+                <span className="tabular-nums text-gray-400 w-8">{animSpeed}x</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                Loop
+              </label>
+            </>
+          )}
+
+          {/* CSS mode: hint */}
+          {timeMode === 'css' && <span className="text-xs text-gray-500">Scroll the bar above to control animation progress</span>}
         </div>
 
         {/* Row 2: display settings */}

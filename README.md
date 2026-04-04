@@ -64,30 +64,93 @@ npm install -D tegaki-generator
 | `font` | `TegakiBundle` | — | Font bundle with animated glyph SVGs |
 | `text` | `string` | — | Text to animate (or pass as `children`) |
 | `children` | `string \| number` | — | Text content, coerced to string |
-| `time` | `number` | — | Controlled mode: current time in seconds |
-| `defaultTime` | `number` | `0` | Uncontrolled mode: starting time |
-| `speed` | `number` | `1` | Playback speed multiplier |
-| `playing` | `boolean` | `true` | Whether animation is playing |
-| `loop` | `boolean` | `false` | Restart when animation ends |
-| `onTimeChange` | `(time: number) => void` | — | Called each frame with current time |
+| `time` | `TimeControlProp` | — | Time control mode (see below) |
 | `onComplete` | `() => void` | — | Called when animation reaches the end |
+| `mode` | `'svg' \| 'canvas'` | `'svg'` | Rendering mode |
 | `showOverlay` | `boolean` | `false` | Show debug text overlay |
 
 Plus all standard `<div>` props (`className`, `style`, etc.).
 
-### Controlled vs. uncontrolled
+### Time control modes
 
-By default, `TegakiRenderer` manages its own playback — it auto-plays on mount and responds to `speed`, `playing`, and `loop`.
+The `time` prop accepts three modes via a discriminated union:
 
-Pass `time` to take control yourself. The component renders the exact frame for that timestamp, which is useful for syncing animation with scroll position, a slider, or streaming text.
+| Value | Mode | Description |
+|-------|------|-------------|
+| *omitted* | Uncontrolled | Auto-plays with default settings |
+| `number` | Controlled | Shorthand for `{ mode: 'controlled', value: n }` |
+| `'css'` | CSS | Shorthand for `{ mode: 'css' }` |
+| `{ mode: 'controlled', value }` | Controlled | You drive the time directly |
+| `{ mode: 'uncontrolled', ... }` | Uncontrolled | Component manages playback |
+| `{ mode: 'css' }` | CSS | Driven by `--tegaki-progress` CSS property |
+
+#### Uncontrolled
+
+The component manages its own playback — auto-plays on mount, responds to `speed`, `playing`, and `loop`.
 
 ```tsx
-// Uncontrolled — just works
-<TegakiRenderer font={font} speed={2} loop>Hello</TegakiRenderer>
+// Default: auto-play at 1x
+<TegakiRenderer font={font}>Hello</TegakiRenderer>
 
-// Controlled — you drive it
+// With options
+<TegakiRenderer font={font} time={{ mode: 'uncontrolled', speed: 2, loop: true }}>
+  Hello
+</TegakiRenderer>
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `initialTime` | `number` | `0` | Starting time in seconds |
+| `speed` | `number` | `1` | Playback speed multiplier |
+| `playing` | `boolean` | `true` | Whether animation is playing |
+| `loop` | `boolean` | `false` | Restart when animation ends |
+| `onTimeChange` | `(time: number) => void` | — | Called each frame with current time |
+
+#### Controlled
+
+You provide the exact time. Useful for syncing with a slider, streaming text, or external state.
+
+```tsx
 <TegakiRenderer font={font} time={currentTime}>Hello</TegakiRenderer>
 ```
+
+#### CSS
+
+Animation progress is driven by the `--tegaki-progress` CSS custom property (0–1). This enables pure-CSS control via animations, transitions, or scroll-timeline — no JS bridge needed.
+
+```tsx
+<TegakiRenderer font={font} time="css" style={...}>Hello</TegakiRenderer>
+```
+
+```css
+/* Example: scroll-driven animation */
+.scroll-container {
+  overflow-x: scroll;
+  scroll-timeline: --tegaki inline;
+}
+
+.tegaki-wrapper {
+  animation: tegaki-reveal linear both;
+  animation-timeline: --tegaki;
+}
+
+@keyframes tegaki-reveal {
+  from { --tegaki-progress: 0; }
+  to   { --tegaki-progress: 1; }
+}
+```
+
+### CSS custom properties
+
+The component exposes these CSS custom properties on its root element in all modes:
+
+| Property | Direction | Description |
+|----------|-----------|-------------|
+| `--tegaki-duration` | Output | Total animation length in seconds |
+| `--tegaki-time` | Output | Current time in seconds |
+| `--tegaki-progress` | Input (CSS mode) / Output | Current progress (0–1) |
+
+All three are registered via `CSS.registerProperty` as `<number>` with `inherits: true`, making them animatable and transitionable.
 
 ### `computeTimeline(text, font)`
 

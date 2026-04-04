@@ -7,6 +7,24 @@ import { computeTimeline } from './timeline.ts';
 import type { Coercible } from './utils.ts';
 import { coerceToString, graphemes } from './utils.ts';
 
+// --- CSS custom property names ---
+
+const CSS_TIME = '--tegaki-time';
+const CSS_PROGRESS = '--tegaki-progress';
+const CSS_DURATION = '--tegaki-duration';
+
+// Register custom properties so they are animatable (typed as <number>).
+// Calling registerProperty twice with the same name throws, so guard with try/catch.
+if (typeof CSS !== 'undefined' && 'registerProperty' in CSS) {
+  for (const prop of [CSS_TIME, CSS_PROGRESS, CSS_DURATION]) {
+    try {
+      CSS.registerProperty({ name: prop, syntax: '<number>', inherits: true, initialValue: '0' });
+    } catch {
+      // Already registered — ignore.
+    }
+  }
+}
+
 export type TimeControlMode = {
   controlled: {
     mode: 'controlled';
@@ -33,9 +51,10 @@ export type TimeControlMode = {
 
 /**
  * A plain number is shorthand for `{ mode: 'controlled', value: number }`.
+ * `'css'` is shorthand for `{ mode: 'css' }`.
  * Omit for uncontrolled mode with default settings.
  */
-export type TimeControlProp = null | undefined | number | TimeControlMode[keyof TimeControlMode];
+export type TimeControlProp = null | undefined | number | 'css' | TimeControlMode[keyof TimeControlMode];
 
 export interface TegakiRendererProps extends Omit<ComponentProps<'div'>, 'children'> {
   /** TegakiBundle with font data and animated glyph SVGs. */
@@ -81,9 +100,16 @@ export function TegakiRenderer({
 
   // --- Resolve time control ---
   const timeControl: TimeControlMode[keyof TimeControlMode] =
-    timeProp == null ? { mode: 'uncontrolled' } : typeof timeProp === 'number' ? { mode: 'controlled', value: timeProp } : timeProp;
+    timeProp == null
+      ? { mode: 'uncontrolled' }
+      : typeof timeProp === 'number'
+        ? { mode: 'controlled', value: timeProp }
+        : timeProp === 'css'
+          ? { mode: 'css' }
+          : timeProp;
 
-  const isControlled = timeControl.mode === 'controlled';
+  const isCss = timeControl.mode === 'css';
+  const isControlled = timeControl.mode === 'controlled' || isCss;
   const controlledTime = timeControl.mode === 'controlled' ? timeControl.value : undefined;
   const defaultTime = timeControl.mode === 'uncontrolled' ? (timeControl.initialTime ?? 0) : 0;
   const speed = timeControl.mode === 'uncontrolled' ? (timeControl.speed ?? 1) : 1;
@@ -93,7 +119,9 @@ export function TegakiRenderer({
 
   // --- Internal time (uncontrolled mode) ---
   const [internalTime, setInternalTime] = useState(defaultTime);
-  const currentTime = isControlled ? controlledTime! : internalTime;
+  // --- CSS-driven time ---
+  const [cssTime, setCssTime] = useState(0);
+  const currentTime = isCss ? cssTime : isControlled ? controlledTime! : internalTime;
 
   // Stable callback refs to avoid restarting the rAF loop
   const onTimeChangeRef = useRef(onTimeChange);
@@ -233,10 +261,14 @@ export function TegakiRenderer({
     const el = sentinelRef.current;
     if (!el) return;
     const onTransition = (e: TransitionEvent) => {
+      const styles = getComputedStyle(el);
       if (e.propertyName === 'font-size' || e.propertyName === 'line-height') {
-        const styles = getComputedStyle(el);
         setFontSize(Number.parseFloat(styles.fontSize));
         setLineHeight(Number.parseFloat(styles.lineHeight));
+      }
+      if (e.propertyName === CSS_PROGRESS) {
+        const rawProgress = Number(styles.getPropertyValue(CSS_PROGRESS));
+        setCssTime(rawProgress * totalDurationRef.current);
       }
     };
     el.addEventListener('transitionend', onTransition);
@@ -403,13 +435,18 @@ export function TegakiRenderer({
     <div
       ref={rootRef}
       {...props}
-      style={{
-        ...props.style,
-        position: 'relative',
-        maxWidth: '100%',
-        width: 'auto',
-        height: 'auto',
-      }}
+      style={
+        {
+          ...props.style,
+          position: 'relative',
+          maxWidth: '100%',
+          width: 'auto',
+          height: 'auto',
+          [CSS_DURATION]: timeline.totalDuration,
+          [CSS_TIME]: currentTime,
+          [CSS_PROGRESS]: timeline.totalDuration > 0 ? currentTime / timeline.totalDuration : 0,
+        } as React.CSSProperties
+      }
     >
       {/* Sentinel: inherits font-size & line-height; its height changes when either changes */}
       <span
@@ -423,7 +460,7 @@ export function TegakiRenderer({
           fontSize: 'inherit',
           lineHeight: 'inherit',
           visibility: 'hidden',
-          transition: 'font-size 0.001s, line-height 0.001s',
+          transition: isCss ? `font-size 0.001s, line-height 0.001s, ${CSS_PROGRESS} 0.001s` : 'font-size 0.001s, line-height 0.001s',
         }}
       >
         {'\u00A0'}
