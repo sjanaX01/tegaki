@@ -602,7 +602,6 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
           WebkitTextFillColor: showOverlay ? undefined : 'transparent',
           fontFamily,
           color: showOverlay ? 'rgba(255, 0, 0, 0.4)' : undefined,
-          fontFeatureSettings: "'calt' 0, 'liga' 0",
         }}
       >
         {resolvedText}

@@ -513,7 +513,7 @@ ${timingEntries.join('\n')}
   },
   registerFontFace() {
     if (!registered) {
-      registered = new FontFace(bundle.family, \`url(\${fontUrl})\`)
+      registered = new FontFace(bundle.family, \`url(\${fontUrl})\`, { featureSettings: "'calt' 0, 'liga' 0" })
         .load()
         .then((loaded) => { document.fonts.add(loaded); });
     }
