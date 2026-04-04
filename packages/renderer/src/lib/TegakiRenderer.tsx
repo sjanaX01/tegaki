@@ -42,7 +42,7 @@ export interface Timeline {
 }
 
 export function computeTimeline(text: string, font: TegakiBundle): Timeline {
-  const chars = text.split('');
+  const chars = Array.from(text);
   const entries: TimelineEntry[] = [];
   let offset = 0;
   for (const char of chars) {
@@ -424,7 +424,7 @@ export function TegakiRenderer({
 
     const emHeightPx = emHeight * fontSize;
     const halfLeading = (lineHeight - emHeightPx) / 2;
-    const characters = resolvedText.split('');
+    const characters = Array.from(resolvedText);
 
     let y = 0;
     for (const lineIndices of layout.lines) {
@@ -469,7 +469,7 @@ export function TegakiRenderer({
     return <div ref={rootRef} {...props} />;
   }
 
-  const characters = resolvedText.split('');
+  const characters = Array.from(resolvedText);
 
   const renderGlyph = (charIdx: number) => {
     const char = characters[charIdx]!;
