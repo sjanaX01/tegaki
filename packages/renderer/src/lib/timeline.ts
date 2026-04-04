@@ -1,9 +1,23 @@
 import type { TegakiBundle } from '../types.ts';
 import { graphemes } from './utils.ts';
 
-const GLYPH_GAP = 0.1;
+export interface TimelineConfig {
+  /** Pause between glyphs (seconds). Default: `0.1` */
+  glyphGap?: number;
+  /** Pause after a space character (seconds). Default: `0.15` */
+  wordGap?: number;
+  /** Pause after a newline / line break (seconds). Default: `0.3` */
+  lineGap?: number;
+  /** Duration for characters without glyph SVGs (seconds). Default: `0.2` */
+  unknownDuration?: number;
+}
 
-export { GLYPH_GAP };
+const DEFAULTS: Required<TimelineConfig> = {
+  glyphGap: 0.1,
+  wordGap: 0.15,
+  lineGap: 0.3,
+  unknownDuration: 0.2,
+};
 
 export interface TimelineEntry {
   char: string;
@@ -17,20 +31,35 @@ export interface Timeline {
   totalDuration: number;
 }
 
-export function computeTimeline(text: string, font: TegakiBundle): Timeline {
+export function computeTimeline(text: string, font: TegakiBundle, config?: TimelineConfig): Timeline {
+  const glyphGap = config?.glyphGap ?? DEFAULTS.glyphGap;
+  const wordGap = config?.wordGap ?? DEFAULTS.wordGap;
+  const lineGap = config?.lineGap ?? DEFAULTS.lineGap;
+  const unknownDuration = config?.unknownDuration ?? DEFAULTS.unknownDuration;
+
   const chars = graphemes(text);
   const entries: TimelineEntry[] = [];
   let offset = 0;
   for (const char of chars) {
     const hasSvg = char in font.glyphs;
-    const duration = hasSvg ? (font.glyphTimings[char] ?? 1) : GLYPH_GAP;
+    const duration = hasSvg ? (font.glyphTimings[char] ?? 1) : unknownDuration;
     entries.push({ char, offset, duration, hasSvg });
     offset += duration;
-    offset += GLYPH_GAP;
+
+    // Gap after this character
+    if (char === '\n') {
+      offset += lineGap;
+    } else if (char === ' ') {
+      offset += wordGap;
+    } else {
+      offset += glyphGap;
+    }
   }
   // Remove trailing gap
   if (entries.length > 0) {
-    offset -= GLYPH_GAP;
+    const lastChar = chars[chars.length - 1]!;
+    const trailingGap = lastChar === '\n' ? lineGap : lastChar === ' ' ? wordGap : glyphGap;
+    offset -= trailingGap;
   }
   return { entries, totalDuration: Math.max(0, offset) };
 }

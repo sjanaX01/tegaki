@@ -91,6 +91,7 @@ export function PreviewApp() {
   const [effectsState, setEffectsState] = useState<EffectsState>(initialUrlState.effectsState);
   const [customEffects, setCustomEffects] = useState<CustomEffect[]>(initialUrlState.customEffects);
   const [segmentSize, setSegmentSize] = useState(initialUrlState.segmentSize);
+  const [catchUp, setCatchUp] = useState(initialUrlState.catchUp);
 
   // Animation state (lifted up so controls live outside the canvas area)
   const [animPlaying, setAnimPlaying] = useState(true);
@@ -244,6 +245,7 @@ export function PreviewApp() {
         effectsState,
         customEffects,
         segmentSize,
+        catchUp,
       });
     }, 300);
     return () => clearTimeout(syncTimerRef.current);
@@ -262,6 +264,7 @@ export function PreviewApp() {
     renderMode,
     timeMode,
     loop,
+    catchUp,
     effectsState,
     customEffects,
     segmentSize,
@@ -726,6 +729,8 @@ export function PreviewApp() {
             onTimeModeChange={setTimeMode}
             loop={loop}
             onLoopChange={setLoop}
+            catchUp={catchUp}
+            onCatchUpChange={setCatchUp}
             effectsState={effectsState}
             onEffectsStateChange={setEffectsState}
             customEffects={customEffects}
@@ -1014,6 +1019,8 @@ function TextPreview({
   onTimeModeChange: setTimeMode,
   loop,
   onLoopChange: setLoop,
+  catchUp,
+  onCatchUpChange,
   effectsState,
   onEffectsStateChange,
   customEffects,
@@ -1041,6 +1048,8 @@ function TextPreview({
   onTimeModeChange: (v: TimeMode) => void;
   loop: boolean;
   onLoopChange: (v: boolean) => void;
+  catchUp: number;
+  onCatchUpChange: (v: number) => void;
   effectsState: EffectsState;
   onEffectsStateChange: (v: EffectsState) => void;
   customEffects: CustomEffect[];
@@ -1267,7 +1276,11 @@ function TextPreview({
 
   // Compute time prop for TegakiRenderer
   const timeProp: TimeControlProp =
-    timeMode === 'controlled' ? displayTime : timeMode === 'uncontrolled' ? { mode: 'uncontrolled', speed: animSpeed, loop } : 'css';
+    timeMode === 'controlled'
+      ? displayTime
+      : timeMode === 'uncontrolled'
+        ? { mode: 'uncontrolled' as const, speed: animSpeed, loop, catchUp: catchUp || undefined }
+        : 'css';
 
   const activeEffectCount = effects ? Object.keys(effects).length : 0;
 
@@ -1770,6 +1783,20 @@ function TextPreview({
               <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
                 <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
                 Loop
+              </label>
+
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                Catch-up
+                <input
+                  type="range"
+                  className="w-20"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={catchUp}
+                  onChange={(e) => onCatchUpChange(Number(e.target.value))}
+                />
+                <span className="tabular-nums text-gray-400 w-8">{catchUp}</span>
               </label>
             </>
           )}

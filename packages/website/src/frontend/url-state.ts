@@ -60,6 +60,7 @@ export interface UrlState {
   renderMode: RenderMode;
   timeMode: TimeMode;
   loop: boolean;
+  catchUp: number;
   effectsState: EffectsState;
   customEffects: CustomEffect[];
   segmentSize: number;
@@ -80,6 +81,7 @@ export const URL_DEFAULTS: UrlState = {
   renderMode: 'svg',
   timeMode: 'controlled',
   loop: false,
+  catchUp: 0,
   effectsState: DEFAULT_EFFECTS_STATE,
   customEffects: [],
   segmentSize: 2,
@@ -127,6 +129,7 @@ export function parseUrlState(): UrlState {
   if (p.has('rm')) state.renderMode = p.get('rm') as RenderMode;
   if (p.has('tm')) state.timeMode = p.get('tm') as TimeMode;
   if (p.has('lo')) state.loop = p.get('lo') === '1';
+  if (p.has('cu')) state.catchUp = Number(p.get('cu'));
   if (p.has('fx')) {
     try {
       state.effectsState = { ...DEFAULT_EFFECTS_STATE, ...JSON.parse(p.get('fx')!) };
@@ -171,6 +174,7 @@ export function buildUrlParams(state: UrlState): URLSearchParams {
   if (state.renderMode !== URL_DEFAULTS.renderMode) p.set('rm', state.renderMode);
   if (state.timeMode !== URL_DEFAULTS.timeMode) p.set('tm', state.timeMode);
   if (state.loop !== URL_DEFAULTS.loop) p.set('lo', '1');
+  if (state.catchUp !== URL_DEFAULTS.catchUp) p.set('cu', String(state.catchUp));
   if (JSON.stringify(state.effectsState) !== JSON.stringify(DEFAULT_EFFECTS_STATE)) {
     p.set('fx', JSON.stringify(state.effectsState));
   }

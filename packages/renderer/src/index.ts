@@ -5,6 +5,6 @@ export {
   type TimeControlMode,
   type TimeControlProp,
 } from './lib/TegakiRenderer.tsx';
-export { computeTimeline, type Timeline } from './lib/timeline.ts';
+export { computeTimeline, type Timeline, type TimelineConfig } from './lib/timeline.ts';
 export type * from './types.ts';
 export type { TegakiEffectConfigs, TegakiEffects } from './types.ts';

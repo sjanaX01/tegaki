@@ -4,7 +4,7 @@ import { drawFallbackGlyph } from './drawFallbackGlyph.ts';
 import { drawGlyph } from './drawGlyph.ts';
 import { resolveEffects } from './effects.ts';
 import { computeTextLayout } from './textLayout.ts';
-import type { TimelineEntry } from './timeline.ts';
+import type { TimelineConfig, TimelineEntry } from './timeline.ts';
 import { computeTimeline } from './timeline.ts';
 import type { Coercible } from './utils.ts';
 import { coerceToString, graphemes } from './utils.ts';
@@ -47,6 +47,13 @@ export type TimeControlMode = {
     playing?: boolean;
     /** Loop animation when it reaches the end. Default: `false` */
     loop?: boolean;
+    /**
+     * Catch-up strength. When positive, playback speeds up when there is a
+     * large amount of remaining animation and decays back to normal gradually.
+     * `0` disables catch-up (default). Higher values ramp up more aggressively.
+     * Typical range: `0.2` – `2`.
+     */
+    catchUp?: number;
     /** Called on every frame with the current time. */
     onTimeChange?: (time: number) => void;
   };
@@ -93,6 +100,9 @@ export interface TegakiRendererProps<E extends TegakiEffects<E> = Record<string,
    * smoother effects but cost more to render. Default: `2` */
   segmentSize?: number;
 
+  /** Timeline timing configuration (gap between glyphs, words, lines, etc.). */
+  timing?: TimelineConfig;
+
   /** Show debug text overlay. */
   showOverlay?: boolean;
 }
@@ -108,6 +118,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
   mode = 'svg',
   effects,
   segmentSize,
+  timing,
   showOverlay,
   ...props
 }: TegakiRendererProps<E>) {
@@ -134,6 +145,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
   const speed = timeControl.mode === 'uncontrolled' ? (timeControl.speed ?? 1) : 1;
   const playing = timeControl.mode === 'uncontrolled' ? (timeControl.playing ?? true) : false;
   const loop = timeControl.mode === 'uncontrolled' ? (timeControl.loop ?? false) : false;
+  const catchUp = timeControl.mode === 'uncontrolled' ? (timeControl.catchUp ?? 0) : 0;
   const onTimeChange = timeControl.mode === 'uncontrolled' ? timeControl.onTimeChange : undefined;
 
   // --- Internal time (uncontrolled mode) ---
@@ -161,13 +173,16 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
 
   // --- Timeline ---
   const timeline = useMemo(
-    () => (font && resolvedText ? computeTimeline(resolvedText, font) : { entries: [] as TimelineEntry[], totalDuration: 0 }),
-    [resolvedText, font],
+    () => (font && resolvedText ? computeTimeline(resolvedText, font, timing) : { entries: [] as TimelineEntry[], totalDuration: 0 }),
+    [resolvedText, font, timing],
   );
 
   // Duration ref so the rAF loop always sees the latest value without restarting
   const totalDurationRef = useRef(timeline.totalDuration);
   totalDurationRef.current = timeline.totalDuration;
+
+  // Smoothed catch-up boost (raw bonus on top of base speed; attack/release smoothed)
+  const smoothedBoostRef = useRef(0);
 
   // --- Completion tracking ---
   const prevCompletedRef = useRef(false);
@@ -193,20 +208,40 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
   useEffect(() => {
     if (isControlled || !playing || !font) return;
 
+    // Reset smoothed boost when the loop restarts
+    smoothedBoostRef.current = 0;
+
     let lastTs: number | null = null;
     let raf: number;
 
+    // Catch-up smoothing rates (per-second exponential factors)
+    const attackRate = 4; // fast ramp-up
+    const releaseRate = loop ? 30 : 2; // slow decay back to base
+
     const tick = (ts: number) => {
       if (lastTs === null) lastTs = ts;
-      const delta = ((ts - lastTs) / 1000) * speed;
+      const dtSec = (ts - lastTs) / 1000;
       lastTs = ts;
 
       setInternalTime((prev: number) => {
         const totalDur = totalDurationRef.current;
-        if (totalDur === 0 || (!loop && prev >= totalDur)) return prev;
-        let next = prev + delta;
+        if (totalDur === 0 || (!loop && prev >= totalDur)) return totalDur;
+
+        // Compute effective speed with catch-up
+        let effectiveSpeed = speed;
+        if (catchUp > 0) {
+          const remaining = Math.max(0, totalDur - prev);
+          const excess = Math.max(0, remaining - 2);
+          const targetBoost = catchUp * excess;
+          const rate = targetBoost > smoothedBoostRef.current ? attackRate : releaseRate;
+          smoothedBoostRef.current += (targetBoost - smoothedBoostRef.current) * (1 - Math.exp(-rate * dtSec));
+          effectiveSpeed = speed + smoothedBoostRef.current;
+        }
+
+        let next = prev + dtSec * effectiveSpeed;
         if (next >= totalDur) {
           next = loop ? next % totalDur : totalDur;
+          smoothedBoostRef.current = 0; // reset boost on loop
         }
         return next;
       });
@@ -216,7 +251,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isControlled, playing, speed, loop, font]);
+  }, [isControlled, playing, speed, loop, catchUp, font]);
 
   // --- SVG refs ---
   const svgRefs = useRef(new Map<number, SVGSVGElement>());
