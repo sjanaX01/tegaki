@@ -160,7 +160,7 @@ function FontCard({ family, text, fontSize }: { family: string; text: string; fo
         )}
         {state.status === 'error' && <div className="text-sm text-red-400">{state.message}</div>}
         {state.status === 'ready' && (
-          <TegakiRenderer font={state.bundle} speed={1} loop style={{ fontSize: fontSize ?? 36 }}>
+          <TegakiRenderer font={state.bundle} time={{ mode: 'uncontrolled', speed: 1, loop: true }} style={{ fontSize: fontSize ?? 36 }}>
             {text}
           </TegakiRenderer>
         )}
@@ -219,7 +219,7 @@ function Hero() {
         )}
         {state.status === 'error' && <div className="py-8 text-center text-red-400">{state.message}</div>}
         {state.status === 'ready' && (
-          <TegakiRenderer font={state.bundle} speed={1} loop style={{ fontSize: 64 }}>
+          <TegakiRenderer font={state.bundle} time={{ mode: 'uncontrolled', speed: 1, loop: true }} style={{ fontSize: 64 }}>
             {HERO_TEXT}
           </TegakiRenderer>
         )}

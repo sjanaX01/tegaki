@@ -7,7 +7,35 @@ import { computeTimeline } from './timeline.ts';
 import type { Coercible } from './utils.ts';
 import { coerceToString, graphemes } from './utils.ts';
 
-// --- Props ---
+export type TimeControlMode = {
+  controlled: {
+    mode: 'controlled';
+    /** Current time in seconds. */
+    value: number;
+  };
+  uncontrolled: {
+    mode: 'uncontrolled';
+    /** Initial time in seconds. Default: `0` */
+    initialTime?: number;
+    /** Playback speed multiplier. Default: `1` */
+    speed?: number;
+    /** Whether animation is playing. Default: `true` */
+    playing?: boolean;
+    /** Loop animation when it reaches the end. Default: `false` */
+    loop?: boolean;
+    /** Called on every frame with the current time. */
+    onTimeChange?: (time: number) => void;
+  };
+  css: {
+    mode: 'css';
+  };
+};
+
+/**
+ * A plain number is shorthand for `{ mode: 'controlled', value: number }`.
+ * Omit for uncontrolled mode with default settings.
+ */
+export type TimeControlProp = null | undefined | number | TimeControlMode[keyof TimeControlMode];
 
 export interface TegakiRendererProps extends Omit<ComponentProps<'div'>, 'children'> {
   /** TegakiBundle with font data and animated glyph SVGs. */
@@ -20,25 +48,11 @@ export interface TegakiRendererProps extends Omit<ComponentProps<'div'>, 'childr
   children?: Coercible;
 
   /**
-   * Controlled time in seconds. When provided, the component uses this value
-   * directly and does not manage its own playback.
+   * Time control. Accepts a number (controlled shorthand), or an object
+   * specifying the mode (`'controlled'`, `'uncontrolled'`, or `'css'`).
+   * Omit for uncontrolled playback with default settings.
    */
-  time?: number;
-
-  /** Initial time for uncontrolled mode. Default: `0` */
-  defaultTime?: number;
-
-  /** Playback speed multiplier (uncontrolled mode). Default: `1` */
-  speed?: number;
-
-  /** Whether animation is playing (uncontrolled mode). Default: `true` */
-  playing?: boolean;
-
-  /** Loop animation when it reaches the end (uncontrolled mode). Default: `false` */
-  loop?: boolean;
-
-  /** Called on every frame with the current time in uncontrolled mode. */
-  onTimeChange?: (time: number) => void;
+  time?: TimeControlProp;
 
   /** Called once when the animation reaches the end of the timeline. */
   onComplete?: () => void;
@@ -57,23 +71,29 @@ export function TegakiRenderer({
   font,
   text,
   children,
-  time: controlledTime,
-  defaultTime = 0,
-  speed = 1,
-  playing = true,
-  loop = false,
-  onTimeChange,
+  time: timeProp,
   onComplete,
   mode = 'svg',
   showOverlay,
   ...props
 }: TegakiRendererProps) {
   const resolvedText = text ?? coerceToString(children);
-  const isControlled = controlledTime !== undefined;
+
+  // --- Resolve time control ---
+  const timeControl: TimeControlMode[keyof TimeControlMode] =
+    timeProp == null ? { mode: 'uncontrolled' } : typeof timeProp === 'number' ? { mode: 'controlled', value: timeProp } : timeProp;
+
+  const isControlled = timeControl.mode === 'controlled';
+  const controlledTime = timeControl.mode === 'controlled' ? timeControl.value : undefined;
+  const defaultTime = timeControl.mode === 'uncontrolled' ? (timeControl.initialTime ?? 0) : 0;
+  const speed = timeControl.mode === 'uncontrolled' ? (timeControl.speed ?? 1) : 1;
+  const playing = timeControl.mode === 'uncontrolled' ? (timeControl.playing ?? true) : false;
+  const loop = timeControl.mode === 'uncontrolled' ? (timeControl.loop ?? false) : false;
+  const onTimeChange = timeControl.mode === 'uncontrolled' ? timeControl.onTimeChange : undefined;
 
   // --- Internal time (uncontrolled mode) ---
   const [internalTime, setInternalTime] = useState(defaultTime);
-  const currentTime = isControlled ? controlledTime : internalTime;
+  const currentTime = isControlled ? controlledTime! : internalTime;
 
   // Stable callback refs to avoid restarting the rAF loop
   const onTimeChangeRef = useRef(onTimeChange);
@@ -134,7 +154,7 @@ export function TegakiRenderer({
       const delta = ((ts - lastTs) / 1000) * speed;
       lastTs = ts;
 
-      setInternalTime((prev) => {
+      setInternalTime((prev: number) => {
         const totalDur = totalDurationRef.current;
         if (totalDur === 0 || (!loop && prev >= totalDur)) return prev;
         let next = prev + delta;
