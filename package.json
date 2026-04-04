@@ -1,8 +1,9 @@
 {
-  "name": "tegaki-monorepo",
+  "name": "@tegaki/root",
   "private": true,
   "type": "module",
   "workspaces": [
+    ".",
     "packages/*"
   ],
   "scripts": {

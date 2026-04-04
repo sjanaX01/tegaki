@@ -54,7 +54,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsdown src/index.ts --dts --sourcemap",
     "prepack": "bun run build && bun ../../scripts/prepareForRelease.ts",
-    "generate-fonts": "bun --filter tegaki-generator start generate Caveat --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne --output ../renderer/fonts/parisienne"
+    "generate-fonts": "bun --filter tegaki-generator start generate Caveat -c '' --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno -c '' --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine -c '' --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne -c '' --output ../renderer/fonts/parisienne"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.4"
