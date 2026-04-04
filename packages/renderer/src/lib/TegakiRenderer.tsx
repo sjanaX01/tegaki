@@ -72,9 +72,8 @@ interface TextLayout {
   intrinsicWidth: number;
 }
 
-function computeTextLayout(text: string, fontFamily: string, fontSize: number, maxWidth: number): TextLayout {
+function computeTextLayout(text: string, fontFamily: string, fontSize: number, lineHeight: number, maxWidth: number): TextLayout {
   const fontStr = `${fontSize}px ${fontFamily}`;
-  const lineHeight = fontSize * 1.4;
 
   // Measure unique character widths
   const widthCache = new Map<string, number>();
@@ -237,6 +236,7 @@ export function TegakiRenderer({
   const rootRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [fontSize, setFontSize] = useState(0);
+  const [lineHeight, setLineHeight] = useState(0);
 
   // --- Timeline ---
   const timeline = useMemo(
@@ -342,7 +342,9 @@ export function TegakiRenderer({
     const ro = new ResizeObserver(([entry]) => {
       if (entry) {
         setContainerWidth(entry.contentRect.width);
-        setFontSize(Number.parseFloat(getComputedStyle(el).fontSize));
+        const styles = getComputedStyle(el);
+        setFontSize(Number.parseFloat(styles.fontSize));
+        setLineHeight(Number.parseFloat(styles.lineHeight));
       }
     });
     ro.observe(el);
@@ -357,8 +359,10 @@ export function TegakiRenderer({
     const el = sentinelRef.current;
     if (!el) return;
     const onTransition = (e: TransitionEvent) => {
-      if (e.propertyName === 'font-size') {
-        setFontSize(Number.parseFloat(getComputedStyle(el).fontSize));
+      if (e.propertyName === 'font-size' || e.propertyName === 'line-height') {
+        const styles = getComputedStyle(el);
+        setFontSize(Number.parseFloat(styles.fontSize));
+        setLineHeight(Number.parseFloat(styles.lineHeight));
       }
     };
     el.addEventListener('transitionend', onTransition);
@@ -367,15 +371,33 @@ export function TegakiRenderer({
 
   // --- Text layout ---
   const layout = useMemo(() => {
-    if (!fontFamily || !fontSize || !containerWidth || !resolvedText) return null;
-    return computeTextLayout(resolvedText, fontFamily, fontSize, containerWidth);
-  }, [resolvedText, fontFamily, fontSize, containerWidth]);
+    if (!fontFamily || !fontSize || !lineHeight || !containerWidth || !resolvedText) return null;
+    return computeTextLayout(resolvedText, fontFamily, fontSize, lineHeight, containerWidth);
+  }, [resolvedText, fontFamily, fontSize, lineHeight, containerWidth]);
 
   // --- Sync only active SVGs before paint ---
   const prevActiveRange = useRef<[number, number]>([-1, -1]);
+  const prevSyncMode = useRef(mode);
   useLayoutEffect(() => {
+    if (mode !== 'svg') return;
     const entries = timeline.entries;
     if (entries.length === 0) return;
+
+    // When switching to SVG mode, all elements are freshly mounted — sync everything
+    const fullSync = prevSyncMode.current !== 'svg';
+    prevSyncMode.current = mode;
+
+    if (fullSync) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]!;
+        const svg = svgRefs.current.get(i);
+        if (!svg || !entry.hasSvg) continue;
+        const localTime = Math.max(0, Math.min(currentTime - entry.offset, entry.duration));
+        svg.setCurrentTime(localTime);
+      }
+      prevActiveRange.current = [-1, -1];
+      return;
+    }
 
     // Find the range of glyphs that need updating:
     // - Previously active glyphs (may need to clamp to 0 or duration)
@@ -409,7 +431,7 @@ export function TegakiRenderer({
     }
 
     prevActiveRange.current = [activeStart, activeEnd];
-  }, [currentTime, timeline]);
+  }, [mode, currentTime, timeline]);
 
   // --- Canvas rendering ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -442,7 +464,6 @@ export function TegakiRenderer({
     // Read currentColor from the container
     const color = getComputedStyle(el).color;
 
-    const lineHeight = fontSize * 1.4;
     const emHeightPx = emHeight * fontSize;
     const halfLeading = (lineHeight - emHeightPx) / 2;
     const characters = resolvedText.split('');
@@ -482,7 +503,7 @@ export function TegakiRenderer({
       }
       y += lineHeight;
     }
-  }, [mode, currentTime, timeline, layout, font, fontSize, resolvedText, emHeight]);
+  }, [mode, currentTime, timeline, layout, font, fontSize, lineHeight, resolvedText, emHeight]);
 
   // --- Rendering ---
 
@@ -569,7 +590,8 @@ export function TegakiRenderer({
           overflow: 'hidden',
           pointerEvents: 'none',
           fontSize: 'inherit',
-          transition: 'font-size 0.001s',
+          lineHeight: 'inherit',
+          transition: 'font-size 0.001s, line-height 0.001s',
         }}
       />
       {mode === 'canvas' ? (

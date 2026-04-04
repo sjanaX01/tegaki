@@ -1,3 +1,4 @@
+import 'bun';
 import { resolve } from 'node:path';
 
 const SCRIPT_PATH = resolve(import.meta.dirname, 'skimage_bridge.py');
