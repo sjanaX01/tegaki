@@ -11,6 +11,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
+        generator: 'generator.html',
         chat: 'chat.html',
       },
     },
