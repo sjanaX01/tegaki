@@ -1,15 +1,5 @@
 import { layoutWithLines, prepareWithSegments } from '@chenglou/pretext';
-import {
-  type ComponentProps,
-  type CSSProperties,
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TegakiBundle } from '../types.ts';
 import { drawGlyph } from './drawGlyph.ts';
 
@@ -47,13 +37,13 @@ export function computeTimeline(text: string, font: TegakiBundle): Timeline {
   let offset = 0;
   for (const char of chars) {
     const hasSvg = char in font.glyphs;
-    const duration = hasSvg ? (font.glyphTimings[char] ?? 1) : 0;
+    const duration = hasSvg ? (font.glyphTimings[char] ?? 1) : GLYPH_GAP;
     entries.push({ char, offset, duration, hasSvg });
     offset += duration;
-    if (hasSvg) offset += GLYPH_GAP;
+    offset += GLYPH_GAP;
   }
   // Remove trailing gap
-  if (entries.length > 0 && entries[entries.length - 1]!.hasSvg) {
+  if (entries.length > 0) {
     offset -= GLYPH_GAP;
   }
   return { entries, totalDuration: Math.max(0, offset) };
@@ -74,11 +64,12 @@ interface TextLayout {
 
 function computeTextLayout(text: string, fontFamily: string, fontSize: number, lineHeight: number, maxWidth: number): TextLayout {
   const fontStr = `${fontSize}px ${fontFamily}`;
+  const chars = Array.from(text);
 
   // Measure unique character widths
   const widthCache = new Map<string, number>();
   const charWidths: number[] = [];
-  for (const char of text) {
+  for (const char of chars) {
     let w = widthCache.get(char);
     if (w === undefined) {
       if (char === '\n') {
@@ -101,28 +92,47 @@ function computeTextLayout(text: string, fontFamily: string, fontSize: number, l
   // Line breaking at actual available width
   const result = layoutWithLines(prepared, maxWidth, lineHeight);
 
-  // Map line texts back to character indices
+  // Map line texts back to character indices (code-point-based)
+  // Build a mapping from UTF-16 offset to code point index
+  const utf16ToCodePoint: number[] = [];
+  for (let ci = 0; ci < chars.length; ci++) {
+    for (let j = 0; j < chars[ci]!.length; j++) {
+      utf16ToCodePoint.push(ci);
+    }
+  }
+
   const lines: number[][] = [];
-  let charOffset = 0;
+  let utf16Offset = 0;
   for (const line of result.lines) {
     const indices: number[] = [];
+    const seen = new Set<number>();
     for (let i = 0; i < line.text.length; i++) {
-      indices.push(charOffset + i);
+      const cpIdx = utf16ToCodePoint[utf16Offset + i]!;
+      if (!seen.has(cpIdx)) {
+        seen.add(cpIdx);
+        indices.push(cpIdx);
+      }
     }
-    charOffset += line.text.length;
+    utf16Offset += line.text.length;
     // Consume the newline that caused this line break
-    if (charOffset < text.length && text[charOffset] === '\n') {
-      indices.push(charOffset);
-      charOffset++;
+    if (utf16Offset < text.length && text[utf16Offset] === '\n') {
+      const cpIdx = utf16ToCodePoint[utf16Offset]!;
+      indices.push(cpIdx);
+      utf16Offset++;
     }
     lines.push(indices);
   }
 
   // Any remaining characters (shouldn't happen, but safety)
-  if (charOffset < text.length) {
+  if (utf16Offset < text.length) {
     const indices: number[] = [];
-    for (let i = charOffset; i < text.length; i++) {
-      indices.push(i);
+    const seen = new Set<number>();
+    for (let i = utf16Offset; i < text.length; i++) {
+      const cpIdx = utf16ToCodePoint[i]!;
+      if (!seen.has(cpIdx)) {
+        seen.add(cpIdx);
+        indices.push(cpIdx);
+      }
     }
     lines.push(indices);
   }
@@ -130,9 +140,9 @@ function computeTextLayout(text: string, fontFamily: string, fontSize: number, l
   // Measure kerning between adjacent character pairs
   const kernings: number[] = [];
   const pairCache = new Map<string, number>();
-  for (let i = 0; i < text.length - 1; i++) {
-    const a = text[i]!;
-    const b = text[i + 1]!;
+  for (let i = 0; i < chars.length - 1; i++) {
+    const a = chars[i]!;
+    const b = chars[i + 1]!;
     if (a === '\n' || b === '\n') {
       kernings.push(0);
       continue;
@@ -478,37 +488,29 @@ export function TegakiRenderer({
     const width = layout?.charWidths[charIdx] ?? 1;
     const kerning = layout?.kernings[charIdx];
 
-    const style: CSSProperties = {
-      width: `${width}em`,
-      marginRight: kerning ? `${kerning}em` : undefined,
-    };
-
-    let content: ReactElement;
-
-    if (char === '\n') {
-      return null; // newlines handled by line structure
-    }
+    if (char === '\n') return null; // newlines handled by line structure
 
     if (GlyphSvg) {
-      content = (
+      return (
         <GlyphSvg
+          key={charIdx}
           ref={getSvgRef(charIdx)}
           style={{
-            display: 'block',
-            width: '100%',
+            display: 'inline-block',
+            verticalAlign: `${baselineOffset}em`,
+            width: `${width}em`,
+            marginRight: kerning ? `${kerning}em` : undefined,
             height: `${emHeight}em`,
             overflow: 'visible',
           }}
         />
       );
-    } else {
-      const isVisible = currentTime >= entry.offset;
-      content = <span style={{ fontFamily, visibility: isVisible ? 'visible' : 'hidden' }}>{char}</span>;
     }
 
+    const isVisible = currentTime >= entry.offset;
     return (
-      <span style={{ display: 'inline-block', verticalAlign: `${baselineOffset}em`, ...style }} key={charIdx}>
-        {content}
+      <span style={{ fontFamily, visibility: isVisible ? 'visible' : 'hidden' }} key={charIdx}>
+        {char}
       </span>
     );
   };
