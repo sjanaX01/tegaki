@@ -8,6 +8,7 @@ const bundle = {
   family: 'Parisienne',
   lineCap: 'round',
   fontUrl,
+  fontFaceCSS: `@font-face { font-family: 'Parisienne'; src: url(${fontUrl}); }`,
   unitsPerEm: 2048,
   ascender: 1875,
   descender: -915,

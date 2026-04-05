@@ -8,6 +8,7 @@ const bundle = {
   family: 'Caveat',
   lineCap: 'round',
   fontUrl,
+  fontFaceCSS: `@font-face { font-family: 'Caveat'; src: url(${fontUrl}); }`,
   unitsPerEm: 1000,
   ascender: 960,
   descender: -300,

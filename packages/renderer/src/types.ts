@@ -111,6 +111,7 @@ export interface TegakiBundle {
   family: string;
   lineCap: LineCap;
   fontUrl: string;
+  fontFaceCSS: string;
   unitsPerEm: number;
   ascender: number;
   descender: number;

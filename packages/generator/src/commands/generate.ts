@@ -453,6 +453,7 @@ const bundle = {
   family: '${fontFamily.replace(/'/g, "\\'")}',
   lineCap: '${lineCap}',
   fontUrl,
+  fontFaceCSS: \`@font-face { font-family: '${fontFamily.replace(/'/g, "\\'")}'; src: url(\${fontUrl}); }\`,
   unitsPerEm: ${unitsPerEm},
   ascender: ${ascender},
   descender: ${descender},

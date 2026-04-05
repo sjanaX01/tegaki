@@ -8,6 +8,7 @@ const bundle = {
   family: 'Tangerine',
   lineCap: 'round',
   fontUrl,
+  fontFaceCSS: `@font-face { font-family: 'Tangerine'; src: url(${fontUrl}); }`,
   unitsPerEm: 1000,
   ascender: 750,
   descender: -250,

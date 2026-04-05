@@ -8,6 +8,7 @@ const bundle = {
   family: 'Italianno',
   lineCap: 'round',
   fontUrl,
+  fontFaceCSS: `@font-face { font-family: 'Italianno'; src: url(${fontUrl}); }`,
   unitsPerEm: 1000,
   ascender: 800,
   descender: -450,
