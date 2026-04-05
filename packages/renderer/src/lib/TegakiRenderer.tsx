@@ -231,6 +231,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
   const [containerWidth, setContainerWidth] = useState(0);
   const [fontSize, setFontSize] = useState(0);
   const [lineHeight, setLineHeight] = useState(0);
+  const [currentColor, setCurrentColor] = useState('');
 
   // --- Timeline ---
   const timeline = useMemo(
@@ -352,6 +353,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
         const styles = getComputedStyle(el);
         setFontSize(Number.parseFloat(styles.fontSize));
         setLineHeight(Number.parseFloat(styles.lineHeight));
+        setCurrentColor(styles.color);
       }
     });
     ro.observe(el);
@@ -370,6 +372,9 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
       if (e.propertyName === 'font-size' || e.propertyName === 'line-height') {
         setFontSize(Number.parseFloat(styles.fontSize));
         setLineHeight(Number.parseFloat(styles.lineHeight));
+      }
+      if (e.propertyName === 'color') {
+        setCurrentColor(styles.color);
       }
       if (e.propertyName === CSS_PROGRESS) {
         const rawProgress = Number(styles.getPropertyValue(CSS_PROGRESS));
@@ -418,8 +423,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
     ctx.clearRect(0, 0, w, h);
     ctx.translate(padH, padV);
 
-    // Read currentColor from the container
-    const color = getComputedStyle(el).color;
+    const color = currentColor || getComputedStyle(el).color;
 
     const emHeightPx = emHeight * fontSize;
     const halfLeading = (lineHeight - emHeightPx) / 2;
@@ -478,6 +482,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
     emHeight,
     padH,
     padV,
+    currentColor,
     resolvedEffects,
     seed,
     segmentSize,
@@ -518,7 +523,9 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
           fontSize: 'inherit',
           lineHeight: 'inherit',
           visibility: 'hidden',
-          transition: isCss ? `font-size 0.001s, line-height 0.001s, ${CSS_PROGRESS} 0.001s` : 'font-size 0.001s, line-height 0.001s',
+          transition: isCss
+            ? `font-size 0.001s, line-height 0.001s, color 0.001s, ${CSS_PROGRESS} 0.001s`
+            : 'font-size 0.001s, line-height 0.001s, color 0.001s',
         }}
       >
         {'\u00A0'}
