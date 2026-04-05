@@ -2,6 +2,7 @@ import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import starlightThemeNova from 'starlight-theme-nova';
 
 export default defineConfig({
   site: 'https://gkurt.com',
@@ -41,13 +42,11 @@ export default defineConfig({
         },
         {
           label: 'Demos',
-          items: [
-            { label: 'Generator', link: '/generator/' },
-            { label: 'Chat Demo', link: '/chat/' },
-          ],
+          items: [{ label: 'Generator', link: '/generator/' }],
         },
       ],
-      customCss: ['./src/styles/custom.css'],
+      customCss: ['./src/styles/global.css'],
+      plugins: [starlightThemeNova({ stylingSystem: 'tailwind' })],
     }),
     react(),
   ],

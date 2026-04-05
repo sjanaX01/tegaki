@@ -7,47 +7,30 @@ Tegaki can animate text as it arrives from a streaming API, making it perfect fo
 
 ## Approach
 
-Use controlled time mode and advance the clock as new text arrives:
+Use uncontrolled mode — it automatically tracks the growing text and animates new characters as they arrive. The `catchUp` option gently speeds up playback when there's buffered text, so the animation stays close to the stream without jumping.
 
 ```tsx
-import { computeTimeline, TegakiRenderer } from 'tegaki';
-import { useEffect, useRef, useState } from 'react';
+import { TegakiRenderer } from 'tegaki';
 
-function StreamingTegaki({ text, font, speed = 4 }) {
-  const [displayTime, setDisplayTime] = useState(0);
-  const timeRef = useRef(0);
-  const durationRef = useRef(0);
-
-  // Recompute total duration as text grows
-  const { totalDuration } = computeTimeline(text, font);
-  durationRef.current = totalDuration;
-
-  useEffect(() => {
-    let lastTs = null;
-    let raf;
-
-    const tick = (ts) => {
-      if (lastTs === null) lastTs = ts;
-      const delta = ((ts - lastTs) / 1000) * speed;
-      lastTs = ts;
-
-      const target = durationRef.current;
-      if (timeRef.current < target) {
-        timeRef.current = Math.min(timeRef.current + delta, target);
-        setDisplayTime(timeRef.current);
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [speed]);
-
-  return <TegakiRenderer text={text} time={displayTime} font={font} />;
+function StreamingMessage({ text, font }) {
+  return (
+    <TegakiRenderer
+      font={font}
+      time={{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }}
+    >
+      {text}
+    </TegakiRenderer>
+  );
 }
 ```
 
+Update `text` as chunks arrive from your API — Tegaki handles the rest.
+
+### Tuning
+
+- **`speed`** — base playback speed multiplier (default `1`). Higher values write faster.
+- **`catchUp`** — how aggressively the animation speeds up to close the gap when text arrives faster than it can be drawn. `0` disables catch-up (default). Typical range: `0.2` – `2`.
+
 ## Live demo
 
-Try the [Chat Demo](/chat/) to see streaming handwriting animation in action with an AI backend.
+See the chat demo on the [homepage](/tegaki/) for an example of streaming handwriting animation.

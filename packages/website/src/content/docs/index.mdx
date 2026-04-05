@@ -16,6 +16,9 @@ hero:
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import { HomePageExamplesLoader } from '../../components/HomePageExamplesLoader.tsx';
+
+<HomePageExamplesLoader client:only="react" />
 
 <CardGrid stagger>
   <Card title="Generate" icon="pencil">

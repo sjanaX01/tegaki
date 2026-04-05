@@ -1,9 +1,28 @@
-@layer base, starlight, theme, components, utilities;
+@layer base, starlight, nova, theme, components, utilities;
 
 @import "@astrojs/starlight-tailwind";
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+@import "starlight-theme-nova/tailwind.css";
 
 html {
   scrollbar-gutter: stable;
+}
+
+.hero {
+  /* Override Starlight's scoped hero padding */
+  padding-block: clamp(1.5rem, calc(1rem + 3vmin), 3rem) !important;
+}
+
+.ruled-lines {
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent calc(1lh - 1px),
+    rgba(150, 152, 160, 0.25) calc(1lh - 1px),
+    rgba(150, 152, 160, 0.25) 1lh
+  );
+  background-size: 100% 1lh;
+  background-attachment: local;
+  scrollbar-gutter: stable;
+  scrollbar-color: rgba(150, 152, 160, 0.25) transparent;
 }
