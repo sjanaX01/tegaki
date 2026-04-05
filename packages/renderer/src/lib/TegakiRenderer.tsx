@@ -294,9 +294,28 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
     }
   }, [internalTime, isControlled]);
 
+  // --- Reduced motion preference ---
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  // When reduced motion is preferred, skip to end of timeline
+  useEffect(() => {
+    if (prefersReducedMotion && !isControlled && timeline.totalDuration > 0) {
+      setInternalTime(timeline.totalDuration);
+    }
+  }, [prefersReducedMotion, isControlled, timeline.totalDuration]);
+
   // --- Uncontrolled: rAF playback loop ---
   useEffect(() => {
-    if (isControlled || !playing || !font || !fontReady) return;
+    if (isControlled || !playing || !font || !fontReady || prefersReducedMotion) return;
 
     // Reset smoothed boost when the loop restarts
     smoothedBoostRef.current = 0;
@@ -341,7 +360,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isControlled, playing, speed, loop, catchUp, font, fontReady]);
+  }, [isControlled, playing, speed, loop, catchUp, font, fontReady, prefersReducedMotion]);
 
   // --- Container size observation ---
   useEffect(() => {
@@ -515,7 +534,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
         {/* Sentinel: inherits font-size & line-height; its height changes when either changes */}
         <span
           ref={sentinelRef}
-          aria-hidden
+          aria-hidden="true"
           style={{
             position: 'absolute',
             width: 0,
@@ -533,7 +552,7 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
         </span>
         <canvas
           ref={canvasRef}
-          aria-hidden
+          aria-hidden="true"
           style={{
             position: 'absolute',
             inset: `${-padV}px ${-padH}px`,
