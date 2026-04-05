@@ -11,6 +11,33 @@ import { computeTimeline } from './timeline.ts';
 import type { Coercible } from './utils.ts';
 import { coerceToString, graphemes } from './utils.ts';
 
+const fontFaceCache = new Map<string, Promise<void>>();
+
+/**
+ * Returns a promise that resolves when the font is ready for text measurement.
+ * - Already loaded (by us or externally): resolves immediately.
+ * - Currently loading externally: waits for `document.fonts.ready`.
+ * - Not registered at all: loads it via the FontFace API.
+ * Returns `null` if the font is already loaded synchronously.
+ */
+function ensureFont(family: string, url: string): Promise<void> | null {
+  if (typeof document === 'undefined') return Promise.resolve();
+  for (const face of document.fonts) {
+    if (face.family === family) {
+      if (face.status === 'loaded') return null;
+      if (face.status === 'loading') return face.loaded.then(() => {});
+    }
+  }
+  let cached = fontFaceCache.get(url);
+  if (!cached) {
+    cached = new FontFace(family, `url(${url})`, { featureSettings: "'calt' 0, 'liga' 0" }).load().then((loaded) => {
+      document.fonts.add(loaded);
+    });
+    fontFaceCache.set(url, cached);
+  }
+  return cached;
+}
+
 const PADDING_H_EM = 0.2;
 const MIN_LINE_HEIGHT_EM = 1.8;
 const MIN_PADDING_V_EM = 0.2;
@@ -209,24 +236,26 @@ export function TegakiRenderer<const E extends TegakiEffects<E> = Record<string,
   onCompleteRef.current = onComplete;
 
   // --- Font loading ---
-  const [fontReady, setFontReady] = useState(
-    () => typeof document !== 'undefined' && !!font && document.fonts.check(`16px "${font.family}"`),
+  // Track which font object has been loaded, so fontReady resets synchronously
+  // when the font prop changes (no stale `true` from the previous font).
+  const [loadedFont, setLoadedFont] = useState<TegakiBundle | null>(() =>
+    font && ensureFont(font.family, font.fontUrl) === null ? font : null,
   );
+  const fontReady = !!font && loadedFont === font;
+
   useEffect(() => {
     if (!font) {
-      setFontReady(false);
+      setLoadedFont(null);
       return;
     }
-    // Check if the font is already loaded
-    if (document.fonts.check(`16px "${font.family}"`)) {
-      setFontReady(true);
+    const pending = ensureFont(font.family, font.fontUrl);
+    if (pending === null) {
+      setLoadedFont(font);
       return;
     }
-    // New font — mark not ready and start loading
-    setFontReady(false);
     let cancelled = false;
-    font.registerFontFace().then(() => {
-      if (!cancelled) setFontReady(true);
+    pending.then(() => {
+      if (!cancelled) setLoadedFont(font);
     });
     return () => {
       cancelled = true;
