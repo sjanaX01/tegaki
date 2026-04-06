@@ -1,4 +1,4 @@
-<img src="media/tegaki.svg" alt="Tegaki" width="128" align="right" />
+<img src="media/tegaki.svg" alt="Tegaki" width="128" align="right" hidden />
 
 # Tegaki
 
