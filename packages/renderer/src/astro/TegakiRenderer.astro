@@ -11,7 +11,7 @@ interface Props extends Omit<TegakiEngineOptions, 'onComplete'> {
   [key: string]: any;
 }
 
-const { text, font, bundle: registerBundle, loadFont, time, effects, timing, segmentSize, showOverlay, class: className, ...attrs } = Astro.props;
+const { text, font, bundle: registerBundle, loadFont, time, effects, timing, segmentSize, showOverlay, class: className, style: userStyle, ...attrs } = Astro.props;
 
 // Resolve the font bundle for SSR
 let resolvedFont: TegakiBundle | undefined;
@@ -73,7 +73,9 @@ function htmlCreateElement(tag: string, props: Record<string, any>, ...children:
 
 const renderResult = shouldRender ? TegakiEngine.renderElements(engineOptions, htmlCreateElement) : null;
 const innerHtml = renderResult?.content ?? '';
-const rootStyle = renderResult ? styleToString(renderResult.rootProps.style) : '';
+const rootStyle = renderResult
+  ? styleToString(renderResult.rootProps.style) + (userStyle ? `;${typeof userStyle === 'object' ? styleToString(userStyle) : userStyle}` : '')
+  : typeof userStyle === 'object' ? styleToString(userStyle) : (userStyle ?? '');
 
 // For serialization, replace the full bundle with just the family name.
 const clientOptions = {

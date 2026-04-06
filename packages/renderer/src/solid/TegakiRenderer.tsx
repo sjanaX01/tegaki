@@ -96,5 +96,7 @@ export function TegakiRenderer(props: TegakiRendererProps) {
     }),
   );
 
-  return <div ref={container!} data-tegaki="root" style={rootProps.style} {...divProps} innerHTML={innerHTML} />;
+  const mergedStyle = { ...rootProps.style, ...(typeof divProps.style === 'object' ? divProps.style : {}) };
+
+  return <div ref={container!} data-tegaki="root" {...divProps} style={mergedStyle} innerHTML={innerHTML} />;
 }

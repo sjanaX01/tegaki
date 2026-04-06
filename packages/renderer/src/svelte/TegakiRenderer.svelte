@@ -11,7 +11,7 @@ interface Props extends Omit<TegakiEngineOptions, 'effects'> {
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: attrs is used in Svelte template
-let { text, font, time: timeProp, onComplete, effects, segmentSize, timing, showOverlay, class: className, ...attrs }: Props = $props();
+let { text, font, time: timeProp, onComplete, effects, segmentSize, timing, showOverlay, class: className, style: userStyle, ...attrs }: Props = $props();
 
 let container = $state<HTMLDivElement | undefined>();
 let engine = $state<TegakiEngine | null>(null);
@@ -78,7 +78,7 @@ function styleToString(style: Record<string, any>): string {
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: used in Svelte template
-const rootStyleStr = styleToString(rootProps.style);
+const rootStyleStr = styleToString(rootProps.style) + (userStyle ? `;${userStyle}` : '');
 
 $effect(() => {
   if (!container) return;
