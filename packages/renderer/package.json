@@ -2,12 +2,16 @@
   "name": "tegaki",
   "version": "0.5.0",
   "type": "module",
-  "description": "Framework-agnostic animated handwriting renderer with React adapter",
+  "description": "Framework-agnostic animated handwriting renderer with React, Svelte, Vue, SolidJS, and Astro adapters",
   "keywords": [
     "handwriting",
     "animation",
     "svg",
     "react",
+    "svelte",
+    "vue",
+    "solid",
+    "astro",
     "font",
     "calligraphy",
     "stroke-order",
@@ -48,6 +52,25 @@
       "types": "./dist/react/index.d.mts",
       "import": "./dist/react/index.mjs"
     },
+    "./svelte": {
+      "tegaki@dev": "./src/svelte/index.ts",
+      "source": "./src/svelte/index.ts",
+      "svelte": "./src/svelte/index.ts",
+      "types": "./dist/svelte/index.d.mts",
+      "import": "./dist/svelte/index.mjs"
+    },
+    "./vue": {
+      "tegaki@dev": "./src/vue/index.ts",
+      "source": "./src/vue/index.ts",
+      "types": "./dist/vue/index.d.mts",
+      "import": "./dist/vue/index.mjs"
+    },
+    "./solid": {
+      "tegaki@dev": "./src/solid/index.ts",
+      "source": "./src/solid/index.ts",
+      "types": "./dist/solid/index.d.mts",
+      "import": "./dist/solid/index.mjs"
+    },
     "./astro": "./src/astro/TegakiRenderer.astro",
     "./fonts/caveat": "./fonts/caveat/bundle.ts",
     "./fonts/italianno": "./fonts/italianno/bundle.ts",
@@ -65,7 +88,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts --dts --sourcemap",
+    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts src/svelte/index.ts src/vue/index.ts src/solid/index.ts --dts --sourcemap",
     "prepack": "bun run build && bun ../../scripts/prepareForRelease.ts",
     "generate-fonts": "bun --filter tegaki-generator start generate Caveat --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne --output ../renderer/fonts/parisienne"
   },
@@ -73,10 +96,22 @@
     "@chenglou/pretext": "^0.0.4"
   },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "svelte": ">=5",
+    "vue": ">=3",
+    "solid-js": ">=1"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "solid-js": {
       "optional": true
     }
   },
