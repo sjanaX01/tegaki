@@ -69,6 +69,12 @@
       "types": "./dist/solid/index.d.mts",
       "import": "./dist/solid/index.mjs"
     },
+    "./wc": {
+      "tegaki@dev": "./src/wc/index.ts",
+      "source": "./src/wc/index.ts",
+      "types": "./dist/wc/index.d.mts",
+      "import": "./dist/wc/index.mjs"
+    },
     "./astro": "./src/astro/TegakiRenderer.astro",
     "./fonts/caveat": "./fonts/caveat/bundle.ts",
     "./fonts/italianno": "./fonts/italianno/bundle.ts",
@@ -86,7 +92,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts src/solid/index.ts --dts --sourcemap",
+    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts src/solid/index.ts src/wc/index.ts --dts --sourcemap",
     "prepack": "bun run build && bun ../../scripts/prepareForRelease.ts",
     "generate-fonts": "bun --filter tegaki-generator start generate Caveat --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne --output ../renderer/fonts/parisienne"
   },

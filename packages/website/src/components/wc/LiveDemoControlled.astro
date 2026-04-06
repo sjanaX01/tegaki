@@ -1,0 +1,54 @@
+---
+interface Props {
+  fontSize?: number;
+}
+
+const { fontSize = 48 } = Astro.props;
+const id = `wc-ctrl-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<div class="not-content live-demo">
+  <div class="live-demo-card">
+    <input type="range" min="0" max="10" step="0.01" value="0" class="live-demo-slider" data-wc-ctrl-slider={id} />
+    <tegaki-renderer
+      id={id}
+      text="Scrub me!"
+      time="0"
+      style={`font-size: ${fontSize}px`}
+    ></tegaki-renderer>
+  </div>
+  <div class="live-demo-caption">Drag the slider to scrub through the animation</div>
+</div>
+
+<script>
+  import { registerTegakiElement, TegakiElement } from 'tegaki/wc';
+  import type { TegakiBundle } from 'tegaki/wc';
+
+  registerTegakiElement();
+
+  let bundlePromise: Promise<TegakiBundle> | null = null;
+  function getBundle(): Promise<TegakiBundle> {
+    if (!bundlePromise) {
+      bundlePromise = import('tegaki/fonts/caveat').then((mod) => (mod as any).default as TegakiBundle);
+    }
+    return bundlePromise;
+  }
+
+  function initControlled(el: TegakiElement) {
+    if (el.dataset.initialized != null) return;
+    el.dataset.initialized = '';
+
+    const slider = document.querySelector<HTMLInputElement>(`[data-wc-ctrl-slider="${el.id}"]`);
+    if (!slider) return;
+
+    getBundle().then((bundle) => {
+      el.font = bundle;
+
+      slider.addEventListener('input', () => {
+        el.setAttribute('time', slider.value);
+      });
+    });
+  }
+
+  document.querySelectorAll<TegakiElement>('tegaki-renderer[id^="wc-ctrl-"]').forEach(initControlled);
+</script>

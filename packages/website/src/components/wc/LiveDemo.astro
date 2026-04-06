@@ -1,0 +1,54 @@
+---
+interface Props {
+  text?: string;
+  fontSize?: number;
+  effects?: Record<string, any>;
+  caption?: string;
+}
+
+const { text = 'Hello World', fontSize = 48, effects, caption } = Astro.props;
+const id = `wc-demo-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<div class="not-content live-demo">
+  <div class="live-demo-card">
+    <tegaki-renderer
+      id={id}
+      text={text}
+      style={`font-size: ${fontSize}px`}
+      loop
+      data-effects={effects ? JSON.stringify(effects) : undefined}
+    ></tegaki-renderer>
+  </div>
+  {caption && <div class="live-demo-caption">{caption}</div>}
+</div>
+
+<script>
+  import { registerTegakiElement, TegakiElement, TegakiEngine } from 'tegaki/wc';
+  import type { TegakiBundle } from 'tegaki/wc';
+
+  registerTegakiElement();
+
+  let bundlePromise: Promise<TegakiBundle> | null = null;
+  function getBundle(): Promise<TegakiBundle> {
+    if (!bundlePromise) {
+      bundlePromise = import('tegaki/fonts/caveat').then((mod) => (mod as any).default as TegakiBundle);
+    }
+    return bundlePromise;
+  }
+
+  function initDemo(el: TegakiElement) {
+    if (el.dataset.initialized != null) return;
+    el.dataset.initialized = '';
+
+    const effectsStr = el.dataset.effects;
+    const effects = effectsStr ? JSON.parse(effectsStr) : undefined;
+
+    getBundle().then((bundle) => {
+      el.font = bundle;
+      if (effects) el.effects = effects;
+    });
+  }
+
+  document.querySelectorAll<TegakiElement>('tegaki-renderer[id^="wc-demo-"]').forEach(initDemo);
+</script>

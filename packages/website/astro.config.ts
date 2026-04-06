@@ -35,6 +35,7 @@ export default defineConfig({
             { label: 'Vue', slug: 'frameworks/vue' },
             { label: 'SolidJS', slug: 'frameworks/solid' },
             { label: 'Astro', slug: 'frameworks/astro' },
+            { label: 'Web Components', slug: 'frameworks/web-components' },
             { label: 'Vanilla JS', slug: 'frameworks/vanilla' },
           ],
         },

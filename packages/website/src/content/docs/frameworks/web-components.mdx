@@ -1,0 +1,194 @@
+---
+title: Web Components
+description: Using Tegaki as a custom element with the Web Components API.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LiveDemo from '../../../components/wc/LiveDemo.astro';
+import LiveDemoControlled from '../../../components/wc/LiveDemoControlled.astro';
+
+Tegaki provides a `<tegaki-renderer>` custom element that works in any browser — no framework required.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```sh
+    npm install tegaki
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```sh
+    pnpm add tegaki
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```sh
+    bun add tegaki
+    ```
+  </TabItem>
+</Tabs>
+
+## Setup
+
+Register the custom element once, before using it in HTML:
+
+```js
+import { registerTegakiElement, TegakiEngine } from 'tegaki/wc';
+import caveat from 'tegaki/fonts/caveat';
+
+// Register the font bundle so the element can find it by name
+TegakiEngine.registerBundle(caveat);
+
+// Register the <tegaki-renderer> custom element
+registerTegakiElement();
+```
+
+## Basic example
+
+```html
+<tegaki-renderer font="Caveat" text="Hello World" style="font-size: 48px">
+</tegaki-renderer>
+```
+
+<LiveDemo text="Hello World" />
+
+The element uses Shadow DOM internally. Style the host element with `font-size` and `color` as usual — the renderer inherits them.
+
+## Text content
+
+You can set the text via the `text` attribute or as the element's text content:
+
+```html
+<!-- Via attribute -->
+<tegaki-renderer font="Caveat" text="Hello World"></tegaki-renderer>
+
+<!-- Via text content (attribute takes priority if both are set) -->
+<tegaki-renderer font="Caveat">Hello World</tegaki-renderer>
+```
+
+## Controlled time
+
+Set the `time` attribute to a number to control the animation manually:
+
+```html
+<tegaki-renderer id="tegaki" font="Caveat" text="Scrub me!" time="0">
+</tegaki-renderer>
+
+<input type="range" min="0" max="10" step="0.01" value="0"
+  oninput="document.getElementById('tegaki').setAttribute('time', this.value)" />
+```
+
+<LiveDemoControlled />
+
+## Playback attributes
+
+Control uncontrolled playback via attributes:
+
+```html
+<!-- Half speed, looping -->
+<tegaki-renderer font="Caveat" text="Slow loop" speed="0.5" loop>
+</tegaki-renderer>
+
+<!-- Paused initially -->
+<tegaki-renderer font="Caveat" text="Paused" playing="false">
+</tegaki-renderer>
+```
+
+## Effects
+
+Effects are objects and can't be expressed as attributes. Use the `effects` property instead:
+
+```js
+const el = document.querySelector('tegaki-renderer');
+
+el.effects = {
+  glow: { radius: 8, color: '#00ccff' },
+  pressureWidth: true,
+  gradient: { colors: 'rainbow' },
+};
+```
+
+<LiveDemo
+  text="Fancy effects"
+  effects={{ glow: { radius: 8, color: '#00ccff' }, pressureWidth: true, gradient: { colors: 'rainbow' } }}
+/>
+
+## Playback controls
+
+The element exposes playback methods and read-only properties:
+
+```js
+const el = document.querySelector('tegaki-renderer');
+
+el.play();
+el.pause();
+el.seek(1.5);    // jump to 1.5 seconds
+el.restart();
+
+el.currentTime;  // current playback time (seconds)
+el.duration;     // total animation duration (seconds)
+el.isPlaying;    // whether animation is running
+el.isComplete;   // whether animation has finished
+```
+
+## Accessing the engine
+
+For advanced use cases, the underlying `TegakiEngine` instance is available:
+
+```js
+const el = document.querySelector('tegaki-renderer');
+const engine = el.engine;
+
+engine.update({ timing: { charDuration: 0.5 } });
+```
+
+## CSS time mode
+
+Use `time="css"` to drive the animation from CSS custom properties:
+
+```html
+<tegaki-renderer font="Caveat" text="CSS driven" time="css">
+</tegaki-renderer>
+```
+
+See the [Rendering Animations](/tegaki/guides/rendering/#css-time-mode) guide for details.
+
+## Custom tag name
+
+Custom element names [must contain a hyphen](https://html.spec.whatwg.org/multipage/custom-elements.html#valid-custom-element-name) per the HTML spec. The default is `tegaki-renderer`, but you can choose any valid name:
+
+```js
+registerTegakiElement('my-handwriting');
+```
+
+```html
+<my-handwriting font="Caveat" text="Custom tag!"></my-handwriting>
+```
+
+## Attributes reference
+
+| Attribute | Type | Description |
+|---|---|---|
+| `text` | `string` | Text to render. Falls back to `textContent` if not set. |
+| `font` | `string` | Registered bundle name (see `TegakiEngine.registerBundle`). |
+| `time` | `number \| "css"` | Controlled time in seconds, or `"css"` for CSS mode. Omit for uncontrolled. |
+| `speed` | `number` | Playback speed multiplier (default `1`). |
+| `playing` | `"true" \| "false"` | Whether animation is playing (default `true`). |
+| `loop` | _boolean attribute_ | Loop animation when it finishes. |
+| `segment-size` | `number` | Segment size for rendering. |
+| `show-overlay` | _boolean attribute_ | Show debug text overlay. |
+
+## Properties reference
+
+These properties are set via JavaScript and support object values that can't be expressed as attributes:
+
+| Property | Type | Description |
+|---|---|---|
+| `font` | `TegakiBundle \| string` | Font bundle object or registered name. |
+| `effects` | `TegakiEffects` | Visual effects configuration. |
+| `timing` | `TimelineConfig` | Timeline timing configuration. |
+| `onComplete` | `() => void` | Callback when animation completes. |
+| `engine` | `TegakiEngine` _(read-only)_ | The underlying engine instance. |
+
+For the full options reference, see the [TegakiRenderer API docs](/tegaki/api/renderer/).
