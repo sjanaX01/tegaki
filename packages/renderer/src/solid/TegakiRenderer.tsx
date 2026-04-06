@@ -76,10 +76,11 @@ export function TegakiRenderer(props: TegakiRendererProps) {
     onComplete: local.onComplete,
   }));
 
-  const innerHTML = createMemo(() => TegakiEngine.renderElements(engineOptions(), solidCreateElement) as unknown as string);
+  // Compute initial HTML once — after the engine adopts, all updates go through engine.update().
+  const innerHTML = TegakiEngine.renderElements(engineOptions(), solidCreateElement) as unknown as string;
 
   onMount(() => {
-    engine = new TegakiEngine(container, { adopt: true });
+    engine = new TegakiEngine(container, { ...engineOptions(), adopt: true });
     local.ref?.({ engine, element: container });
   });
 
@@ -94,5 +95,5 @@ export function TegakiRenderer(props: TegakiRendererProps) {
     }),
   );
 
-  return <div ref={container!} {...divProps} innerHTML={innerHTML()} />;
+  return <div ref={container!} {...divProps} innerHTML={innerHTML} />;
 }

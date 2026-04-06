@@ -1,0 +1,119 @@
+---
+title: Astro
+description: Using Tegaki with Astro for animated handwriting.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LiveDemo from '../../../components/astro/LiveDemo.astro';
+
+Tegaki provides a native Astro component that renders full HTML at build time and hydrates on the client. No JavaScript framework required — text is visible even before hydration.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```sh
+    npm install tegaki
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```sh
+    pnpm add tegaki
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```sh
+    bun add tegaki
+    ```
+  </TabItem>
+</Tabs>
+
+## Basic example
+
+```astro
+---
+import { TegakiRenderer } from 'tegaki/astro';
+import bundle from 'tegaki/fonts/caveat';
+---
+
+<TegakiRenderer
+  font={bundle}
+  text="Hello World"
+  time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+  style="font-size: 48px"
+/>
+```
+
+<LiveDemo text="Hello World" />
+
+## Font registration
+
+When using the same font across multiple components on a page, you can register the bundle once and reference it by name. This avoids duplicating the font data in the HTML output.
+
+### Register the bundle
+
+Use the `bundle` prop on a dedicated instance — it serializes the font data into a `<script type="application/json">` tag and registers it on the client:
+
+```astro
+---
+import { TegakiRenderer } from 'tegaki/astro';
+import bundle from 'tegaki/fonts/caveat';
+---
+
+<!-- Register the bundle once (renders nothing visible) -->
+<TegakiRenderer font={bundle} bundle />
+
+<!-- Use the font by name -->
+<TegakiRenderer font="Caveat" text="First line" />
+<TegakiRenderer font="Caveat" text="Second line" />
+```
+
+### Preload the font
+
+Add `loadFont` to inject an `@font-face` rule so the browser starts downloading the font file immediately:
+
+```astro
+<TegakiRenderer font={bundle} bundle loadFont />
+```
+
+## Effects
+
+```astro
+---
+import { TegakiRenderer } from 'tegaki/astro';
+import bundle from 'tegaki/fonts/caveat';
+---
+
+<TegakiRenderer
+  font={bundle}
+  text="Fancy effects"
+  time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+  effects={{
+    glow: { radius: 8, color: '#00ccff' },
+    pressureWidth: true,
+    gradient: { colors: 'rainbow' },
+  }}
+  style="font-size: 48px"
+/>
+```
+
+<LiveDemo
+  text="Fancy effects"
+  effects={{ glow: { radius: 8, color: '#00ccff' }, pressureWidth: true, gradient: { colors: 'rainbow' } }}
+/>
+
+## How it works
+
+1. **Build time** — The Astro component calls `TegakiEngine.renderElements()` to produce the full HTML (canvas fallback text, overlay, sentinel). Text is visible in the initial HTML even without JavaScript.
+2. **Client hydration** — A module script finds all `[data-tegaki-options]` elements, creates a `TegakiEngine` with `adopt: true` (reusing existing DOM), and starts the animation.
+3. **Dynamic elements** — A `MutationObserver` watches for elements added after initial load (e.g., from View Transitions or client-side routing) and hydrates them automatically.
+
+## Props
+
+The Astro component accepts all [`TegakiEngineOptions`](/tegaki/api/renderer/) plus:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `bundle` | `boolean` | Register the font bundle for client-side lookup by name |
+| `loadFont` | `boolean` | Inject `@font-face` CSS for early font loading |
+| `class` | `string` | CSS class on the container |

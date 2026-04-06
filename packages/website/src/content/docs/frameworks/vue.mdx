@@ -1,0 +1,158 @@
+---
+title: Vue
+description: Using Tegaki with Vue 3 for animated handwriting.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LiveDemo from '../../../components/vue/LiveDemo.vue';
+import LiveDemoControlled from '../../../components/vue/LiveDemoControlled.vue';
+
+Tegaki provides a Vue 3 component (Composition API) with SSR support and deep reactive prop watching.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```sh
+    npm install tegaki vue
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```sh
+    pnpm add tegaki vue
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```sh
+    bun add tegaki vue
+    ```
+  </TabItem>
+</Tabs>
+
+## Basic example
+
+```vue
+<script setup>
+import { TegakiRenderer } from 'tegaki/vue';
+import bundle from 'tegaki/fonts/caveat';
+</script>
+
+<template>
+  <TegakiRenderer
+    :font="bundle"
+    text="Hello World"
+    :time="{ mode: 'uncontrolled', speed: 1, loop: true }"
+    :style="{ fontSize: '48px' }"
+  />
+</template>
+```
+
+<LiveDemo client:only="vue" text="Hello World" />
+
+## Controlled time
+
+Use `v-model` or a reactive ref to drive the animation:
+
+```vue
+<script setup>
+import { ref } from 'vue';
+import { TegakiRenderer } from 'tegaki/vue';
+import bundle from 'tegaki/fonts/caveat';
+
+const time = ref(0);
+</script>
+
+<template>
+  <input type="range" :min="0" :max="10" :step="0.01" v-model.number="time" />
+
+  <TegakiRenderer
+    :font="bundle"
+    text="Scrub me!"
+    :time="time"
+    :style="{ fontSize: '48px' }"
+  />
+</template>
+```
+
+<LiveDemoControlled client:only="vue" />
+
+## Effects
+
+```vue
+<script setup>
+import { TegakiRenderer } from 'tegaki/vue';
+import bundle from 'tegaki/fonts/caveat';
+</script>
+
+<template>
+  <TegakiRenderer
+    :font="bundle"
+    text="Fancy effects"
+    :time="{ mode: 'uncontrolled', speed: 1, loop: true }"
+    :effects="{
+      glow: { radius: 8, color: '#00ccff' },
+      pressureWidth: true,
+      gradient: { colors: 'rainbow' },
+    }"
+    :style="{ fontSize: '48px' }"
+  />
+</template>
+```
+
+<LiveDemo
+  client:only="vue"
+  text="Fancy effects"
+  effects={{ glow: { radius: 8, color: '#00ccff' }, pressureWidth: true, gradient: { colors: 'rainbow' } }}
+/>
+
+## Streaming text
+
+```vue
+<script setup>
+import { TegakiRenderer } from 'tegaki/vue';
+import bundle from 'tegaki/fonts/caveat';
+
+const props = defineProps<{ text: string }>();
+</script>
+
+<template>
+  <TegakiRenderer
+    :font="bundle"
+    :text="props.text"
+    :time="{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }"
+    :style="{ fontSize: '32px' }"
+  />
+</template>
+```
+
+## Exposed instance
+
+The component exposes `engine` and `element` via template refs:
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue';
+import { TegakiRenderer } from 'tegaki/vue';
+import bundle from 'tegaki/fonts/caveat';
+
+const tegaki = ref();
+
+onMounted(() => {
+  console.log(tegaki.value.engine); // TegakiEngine instance
+});
+</script>
+
+<template>
+  <TegakiRenderer
+    ref="tegaki"
+    :font="bundle"
+    text="Hello World"
+    :time="{ mode: 'uncontrolled', speed: 1 }"
+    :style="{ fontSize: '48px' }"
+  />
+</template>
+```
+
+## Props
+
+The Vue component accepts all [`TegakiEngineOptions`](/tegaki/api/renderer/) as props.

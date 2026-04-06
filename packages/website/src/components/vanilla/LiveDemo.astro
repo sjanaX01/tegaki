@@ -1,0 +1,60 @@
+---
+interface Props {
+  text?: string;
+  fontSize?: number;
+  effects?: Record<string, any>;
+  caption?: string;
+}
+
+const { text = 'Hello World', fontSize = 48, effects, caption } = Astro.props;
+const id = `vanilla-demo-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<div class="not-content live-demo">
+  <div class="live-demo-card">
+    <div id={id} style={`font-size: ${fontSize}px`}></div>
+  </div>
+  {caption && <div class="live-demo-caption">{caption}</div>}
+</div>
+
+<script
+  is:inline
+  data-vanilla-demo={id}
+  data-text={text}
+  data-effects={effects ? JSON.stringify(effects) : undefined}
+></script>
+
+<script>
+  import { TegakiEngine } from 'tegaki/core';
+  import type { TegakiBundle } from 'tegaki/core';
+
+  let bundlePromise: Promise<TegakiBundle> | null = null;
+  function getBundle(): Promise<TegakiBundle> {
+    if (!bundlePromise) {
+      bundlePromise = import('tegaki/fonts/caveat').then((mod) => (mod as any).default as TegakiBundle);
+    }
+    return bundlePromise;
+  }
+
+  function initDemo(script: HTMLScriptElement) {
+    const containerId = script.dataset.vanillaDemo;
+    if (!containerId) return;
+    const container = document.getElementById(containerId);
+    if (!container || container.dataset.initialized) return;
+    container.dataset.initialized = '';
+
+    const text = script.dataset.text || 'Hello World';
+    const effects = script.dataset.effects ? JSON.parse(script.dataset.effects) : undefined;
+
+    getBundle().then((bundle) => {
+      new TegakiEngine(container, {
+        text,
+        font: bundle,
+        time: { mode: 'uncontrolled', speed: 1, loop: true },
+        effects,
+      });
+    });
+  }
+
+  document.querySelectorAll<HTMLScriptElement>('script[data-vanilla-demo]').forEach(initDemo);
+</script>

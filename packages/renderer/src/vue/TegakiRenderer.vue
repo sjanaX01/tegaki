@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { TegakiEngine, type TegakiEngineOptions } from '../core/engine.ts';
-import type { TegakiEffects } from '../types.ts';
+import type { TegakiBundle, TegakiEffects } from '../types.ts';
+import type { TimeControlProp } from '../core/engine.ts';
+import type { TimelineConfig } from '../lib/timeline.ts';
 
-interface Props extends /* @vue-ignore */ Omit<TegakiEngineOptions, 'effects'> {
-  /** Visual effects applied during canvas rendering. */
+const props = defineProps<{
+  text?: string;
+  font?: TegakiBundle | string;
+  time?: TimeControlProp;
   effects?: TegakiEffects<Record<string, any>>;
-}
+  timing?: TimelineConfig;
+  segmentSize?: number;
+  showOverlay?: boolean;
+  onComplete?: () => void;
+}>();
 
-const props = defineProps<Props>();
+defineOptions({ inheritAttrs: false });
 
 const container = ref<HTMLDivElement>();
 let engine: TegakiEngine | null = null;
@@ -57,12 +65,13 @@ function htmlCreateElement(tag: string, nodeProps: Record<string, any>, ...child
   return `${open}${content}</${tag}>`;
 }
 
+// Compute initial HTML once — after the engine adopts, all updates go through engine.update().
 // biome-ignore lint/correctness/noUnusedVariables: used in Vue template
-const innerHtml = computed(() => TegakiEngine.renderElements(engineOptions.value, htmlCreateElement));
+const innerHtml = TegakiEngine.renderElements(engineOptions.value, htmlCreateElement);
 
 onMounted(() => {
   if (!container.value) return;
-  engine = new TegakiEngine(container.value, { adopt: true });
+  engine = new TegakiEngine(container.value, { ...engineOptions.value, adopt: true });
 });
 
 onUnmounted(() => {
@@ -82,5 +91,5 @@ defineExpose({ engine, element: container });
 </script>
 
 <template>
-  <div ref="container" v-html="innerHtml" />
+  <div ref="container" v-bind="$attrs" v-html="innerHtml" />
 </template>

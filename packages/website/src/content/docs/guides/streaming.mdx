@@ -3,26 +3,75 @@ title: Streaming Text
 description: Animate handwriting as text streams in from an API.
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Tegaki can animate text as it arrives from a streaming API, making it perfect for AI chat interfaces.
 
 ## Approach
 
 Use uncontrolled mode — it automatically tracks the growing text and animates new characters as they arrive. The `catchUp` option gently speeds up playback when there's buffered text, so the animation stays close to the stream without jumping.
 
-```tsx
-import { TegakiRenderer } from 'tegaki';
+<Tabs>
+  <TabItem label="React">
+    ```tsx
+    import { TegakiRenderer } from 'tegaki';
 
-function StreamingMessage({ text, font }) {
-  return (
+    function StreamingMessage({ text, font }) {
+      return (
+        <TegakiRenderer
+          font={font}
+          time={{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }}
+        >
+          {text}
+        </TegakiRenderer>
+      );
+    }
+    ```
+  </TabItem>
+  <TabItem label="Svelte">
+    ```svelte
+    <script>
+      import { TegakiRenderer } from 'tegaki/svelte';
+      let { text, font } = $props();
+    </script>
+
     <TegakiRenderer
-      font={font}
-      time={{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }}
-    >
+      {font}
       {text}
-    </TegakiRenderer>
-  );
-}
-```
+      time={{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }}
+    />
+    ```
+  </TabItem>
+  <TabItem label="Vue">
+    ```vue
+    <script setup>
+    import { TegakiRenderer } from 'tegaki/vue';
+    const props = defineProps<{ text: string; font: any }>();
+    </script>
+
+    <template>
+      <TegakiRenderer
+        :font="props.font"
+        :text="props.text"
+        :time="{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }"
+      />
+    </template>
+    ```
+  </TabItem>
+  <TabItem label="Vanilla JS">
+    ```js
+    import { TegakiEngine } from 'tegaki/core';
+
+    const engine = new TegakiEngine(container, {
+      font: bundle,
+      time: { mode: 'uncontrolled', speed: 4, catchUp: 0.5 },
+    });
+
+    // As chunks arrive:
+    engine.update({ text: accumulatedText });
+    ```
+  </TabItem>
+</Tabs>
 
 Update `text` as chunks arrive from your API — Tegaki handles the rest.
 

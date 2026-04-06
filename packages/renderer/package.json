@@ -56,14 +56,12 @@
       "tegaki@dev": "./src/svelte/index.ts",
       "source": "./src/svelte/index.ts",
       "svelte": "./src/svelte/index.ts",
-      "types": "./dist/svelte/index.d.mts",
-      "import": "./dist/svelte/index.mjs"
+      "default": "./src/svelte/index.ts"
     },
     "./vue": {
       "tegaki@dev": "./src/vue/index.ts",
       "source": "./src/vue/index.ts",
-      "types": "./dist/vue/index.d.mts",
-      "import": "./dist/vue/index.mjs"
+      "default": "./src/vue/index.ts"
     },
     "./solid": {
       "tegaki@dev": "./src/solid/index.ts",
@@ -88,7 +86,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts src/svelte/index.ts src/vue/index.ts src/solid/index.ts --dts --sourcemap",
+    "build": "tsdown src/index.ts src/core/index.ts src/react/index.ts src/solid/index.ts --dts --sourcemap",
     "prepack": "bun run build && bun ../../scripts/prepareForRelease.ts",
     "generate-fonts": "bun --filter tegaki-generator start generate Caveat --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne --output ../renderer/fonts/parisienne"
   },

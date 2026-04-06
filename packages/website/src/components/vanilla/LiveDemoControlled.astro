@@ -1,0 +1,55 @@
+---
+interface Props {
+  fontSize?: number;
+  caption?: string;
+}
+
+const { fontSize = 48 } = Astro.props;
+const id = `vanilla-ctrl-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<div class="not-content live-demo">
+  <div class="live-demo-card">
+    <input type="range" min="0" max="10" step="0.01" value="0" class="live-demo-slider" data-vanilla-ctrl-slider={id} />
+    <div id={id} style={`font-size: ${fontSize}px`}></div>
+  </div>
+  <div class="live-demo-caption">Drag the slider to scrub through the animation</div>
+</div>
+
+<script is:inline data-vanilla-ctrl={id}></script>
+
+<script>
+  import { TegakiEngine } from 'tegaki/core';
+  import type { TegakiBundle } from 'tegaki/core';
+
+  let bundlePromise: Promise<TegakiBundle> | null = null;
+  function getBundle(): Promise<TegakiBundle> {
+    if (!bundlePromise) {
+      bundlePromise = import('tegaki/fonts/caveat').then((mod) => (mod as any).default as TegakiBundle);
+    }
+    return bundlePromise;
+  }
+
+  function initControlled(script: HTMLScriptElement) {
+    const containerId = script.dataset.vanillaCtrl;
+    if (!containerId) return;
+    const container = document.getElementById(containerId);
+    const slider = document.querySelector<HTMLInputElement>(`[data-vanilla-ctrl-slider="${containerId}"]`);
+    if (!container || !slider || container.dataset.initialized) return;
+    container.dataset.initialized = '';
+
+    getBundle().then((bundle) => {
+      const engine = new TegakiEngine(container, {
+        text: 'Scrub me!',
+        font: bundle,
+        time: 0,
+      });
+
+      slider.addEventListener('input', () => {
+        engine.update({ time: Number(slider.value) });
+      });
+    });
+  }
+
+  document.querySelectorAll<HTMLScriptElement>('script[data-vanilla-ctrl]').forEach(initControlled);
+</script>

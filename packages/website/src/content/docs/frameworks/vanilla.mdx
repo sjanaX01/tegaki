@@ -1,0 +1,155 @@
+---
+title: Vanilla JS
+description: Using TegakiEngine directly without a framework.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import LiveDemo from '../../../components/vanilla/LiveDemo.astro';
+import LiveDemoControlled from '../../../components/vanilla/LiveDemoControlled.astro';
+
+You can use `TegakiEngine` directly with plain JavaScript or TypeScript — no framework needed.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```sh
+    npm install tegaki
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```sh
+    pnpm add tegaki
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```sh
+    bun add tegaki
+    ```
+  </TabItem>
+</Tabs>
+
+## Basic example
+
+```html
+<div id="tegaki" style="font-size: 48px"></div>
+
+<script type="module">
+  import { TegakiEngine } from 'tegaki/core';
+  import bundle from 'tegaki/fonts/caveat';
+
+  const container = document.getElementById('tegaki');
+
+  const engine = new TegakiEngine(container, {
+    text: 'Hello World',
+    font: bundle,
+    time: { mode: 'uncontrolled', speed: 1, loop: true },
+  });
+</script>
+```
+
+The engine creates all DOM elements inside the container automatically.
+
+<LiveDemo text="Hello World" />
+
+## Updating options
+
+Call `update()` to change text, font, time, or effects at any time:
+
+```js
+engine.update({ text: 'New text' });
+
+engine.update({
+  effects: {
+    glow: { radius: 8, color: '#00ccff' },
+  },
+});
+```
+
+## Controlled time
+
+Pass a number to `time` and update it on each frame:
+
+```js
+const engine = new TegakiEngine(container, {
+  text: 'Controlled',
+  font: bundle,
+  time: 0,
+});
+
+let t = 0;
+function animate() {
+  t += 0.016;
+  engine.update({ time: t });
+  requestAnimationFrame(animate);
+}
+animate();
+```
+
+<LiveDemoControlled />
+
+## Effects
+
+```js
+const engine = new TegakiEngine(container, {
+  text: 'Fancy effects',
+  font: bundle,
+  time: { mode: 'uncontrolled', speed: 1, loop: true },
+  effects: {
+    glow: { radius: 8, color: '#00ccff' },
+    pressureWidth: true,
+    gradient: { colors: 'rainbow' },
+  },
+});
+```
+
+<LiveDemo
+  text="Fancy effects"
+  effects={{ glow: { radius: 8, color: '#00ccff' }, pressureWidth: true, gradient: { colors: 'rainbow' } }}
+/>
+
+## Cleanup
+
+Call `destroy()` when you're done to remove event listeners and stop the animation loop:
+
+```js
+engine.destroy();
+```
+
+## Font registration
+
+Register bundles globally so you can reference them by name:
+
+```js
+import { TegakiEngine } from 'tegaki/core';
+import caveat from 'tegaki/fonts/caveat';
+
+TegakiEngine.registerBundle(caveat);
+
+// Later, anywhere in your app:
+const engine = new TegakiEngine(container, {
+  text: 'Hello',
+  font: 'Caveat', // resolved from the registry
+});
+```
+
+## Pre-rendering (SSR)
+
+Use `TegakiEngine.renderElements()` to produce the element tree on the server, then adopt it on the client:
+
+```js
+import { TegakiEngine } from 'tegaki/core';
+
+// Server: render to HTML string
+const html = TegakiEngine.renderElements(
+  { text: 'Hello', font: bundle },
+  (tag, props, ...children) => {
+    // your HTML string builder
+  },
+);
+
+// Client: adopt pre-rendered DOM
+const engine = new TegakiEngine(container, { adopt: true, text: 'Hello', font: bundle });
+```
+
+This is what all framework adapters use internally.

@@ -1,24 +1,74 @@
 ---
 title: Rendering Animations
-description: How to use TegakiRenderer to display handwriting animations.
+description: How to use Tegaki to display handwriting animations.
 ---
 
-The `TegakiRenderer` component handles text layout, line wrapping, and animation playback.
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Tegaki handles text layout, line wrapping, and animation playback. See the [framework guides](/tegaki/frameworks/react/) for framework-specific setup.
 
 ## Basic usage
 
-```tsx
-import { TegakiRenderer } from 'tegaki';
-import bundle from './output/caveat/bundle';
+<Tabs>
+  <TabItem label="React">
+    ```tsx
+    import { TegakiRenderer } from 'tegaki';
+    import bundle from 'tegaki/fonts/caveat';
 
-<TegakiRenderer
-  font={bundle}
-  time={{ mode: 'uncontrolled', speed: 1, loop: true }}
-  style={{ fontSize: 48 }}
->
-  Hello World
-</TegakiRenderer>
-```
+    <TegakiRenderer
+      font={bundle}
+      time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+      style={{ fontSize: 48 }}
+    >
+      Hello World
+    </TegakiRenderer>
+    ```
+  </TabItem>
+  <TabItem label="Svelte">
+    ```svelte
+    <script>
+      import { TegakiRenderer } from 'tegaki/svelte';
+      import bundle from 'tegaki/fonts/caveat';
+    </script>
+
+    <TegakiRenderer
+      font={bundle}
+      text="Hello World"
+      time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+      style="font-size: 48px"
+    />
+    ```
+  </TabItem>
+  <TabItem label="Vue">
+    ```vue
+    <script setup>
+    import { TegakiRenderer } from 'tegaki/vue';
+    import bundle from 'tegaki/fonts/caveat';
+    </script>
+
+    <template>
+      <TegakiRenderer
+        :font="bundle"
+        text="Hello World"
+        :time="{ mode: 'uncontrolled', speed: 1, loop: true }"
+        :style="{ fontSize: '48px' }"
+      />
+    </template>
+    ```
+  </TabItem>
+  <TabItem label="Vanilla JS">
+    ```js
+    import { TegakiEngine } from 'tegaki/core';
+    import bundle from 'tegaki/fonts/caveat';
+
+    new TegakiEngine(document.getElementById('tegaki'), {
+      text: 'Hello World',
+      font: bundle,
+      time: { mode: 'uncontrolled', speed: 1, loop: true },
+    });
+    ```
+  </TabItem>
+</Tabs>
 
 ## Time control modes
 
@@ -26,51 +76,52 @@ import bundle from './output/caveat/bundle';
 
 The component manages its own animation clock:
 
-```tsx
-<TegakiRenderer
-  font={bundle}
-  time={{ mode: 'uncontrolled', speed: 2, loop: true }}
->
-  Animated text
-</TegakiRenderer>
+```ts
+time: { mode: 'uncontrolled', speed: 2, loop: true }
 ```
+
+Options:
+- **`speed`** — playback speed multiplier (default `1`)
+- **`loop`** — restart when animation completes (default `false`)
+- **`playing`** — pause/resume (default `true`)
+- **`catchUp`** — speed up when buffered text is ahead (for streaming)
 
 ### Controlled
 
 You provide the current time value directly (useful for syncing with external state):
 
-```tsx
-const [time, setTime] = useState(0);
-
-<TegakiRenderer font={bundle} time={time}>
-  Controlled text
-</TegakiRenderer>
+```ts
+time: 2.5 // seconds
+// or
+time: { mode: 'controlled', value: 2.5 }
 ```
 
 ### CSS
 
 Animation is driven purely by CSS (best performance, no JavaScript animation loop):
 
-```tsx
-<TegakiRenderer
-  font={bundle}
-  time={{ mode: 'css', speed: 1 }}
->
-  CSS animated
-</TegakiRenderer>
+```ts
+time: 'css'
+// or
+time: { mode: 'css' }
 ```
 
 ## Effects
 
-```tsx
-<TegakiRenderer
-  font={bundle}
-  effects={{ glow: { radius: 8, color: '#00ccff' } }}
->
-  With effects
-</TegakiRenderer>
+All frameworks accept the same effects configuration:
+
+```ts
+effects: {
+  glow: { radius: 8, color: '#00ccff' },
+  wobble: { amplitude: 1.5, frequency: 8 },
+  pressureWidth: { strength: 1 },
+  taper: { startLength: 0.15, endLength: 0.15 },
+  gradient: { colors: 'rainbow' },
+}
 ```
+
+Effects can also be set to `true` for defaults: `{ pressureWidth: true }`.
 
 ## Streaming text
 
-For chat-like interfaces where text arrives incrementally, see [Streaming Text](/guides/streaming/).
+For chat-like interfaces where text arrives incrementally, see [Streaming Text](/tegaki/guides/streaming/).

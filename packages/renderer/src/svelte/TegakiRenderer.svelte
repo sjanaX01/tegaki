@@ -1,4 +1,5 @@
 <script lang="ts">
+import { untrack } from 'svelte';
 import { TegakiEngine, type TegakiEngineOptions } from '../core/engine.ts';
 import type { TegakiEffects } from '../types.ts';
 
@@ -59,12 +60,19 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Compute initial HTML once — after the engine adopts, all updates go through engine.update().
 // biome-ignore lint/correctness/noUnusedVariables: used in Svelte template
-const innerHtml: string = $derived(TegakiEngine.renderElements(engineOptions, svelteCreateElement));
+const innerHtml: string = TegakiEngine.renderElements(
+  { text, font, time: timeProp, effects: effects as Record<string, any>, segmentSize, timing, showOverlay, onComplete },
+  svelteCreateElement,
+);
 
 $effect(() => {
   if (!container) return;
-  const e = new TegakiEngine(container, { adopt: true });
+  // Read engineOptions outside tracking to avoid re-running this effect on prop changes.
+  // Prop updates are handled by the separate engine.update() effect below.
+  const opts = untrack(() => engineOptions);
+  const e = new TegakiEngine(container, { ...opts, adopt: true });
   engine = e;
   return () => {
     e.destroy();

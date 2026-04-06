@@ -1,14 +1,19 @@
 ---
 title: TegakiRenderer
-description: API reference for the TegakiRenderer React component.
+description: API reference for TegakiRenderer and TegakiEngine options.
 ---
 
-The main component exported by the `tegaki` package.
+The renderer component is available for every supported framework. See the [framework guides](/tegaki/frameworks/react/) for import paths.
 
 ## Import
 
 ```tsx
-import { TegakiRenderer } from 'tegaki';
+import { TegakiRenderer } from 'tegaki';        // React
+import { TegakiRenderer } from 'tegaki/svelte';  // Svelte
+import { TegakiRenderer } from 'tegaki/vue';     // Vue
+import { TegakiRenderer } from 'tegaki/solid';   // SolidJS
+import { TegakiRenderer } from 'tegaki/astro';   // Astro
+import { TegakiEngine } from 'tegaki/core';       // Vanilla JS
 ```
 
 ## Props
@@ -57,9 +62,13 @@ Effects configuration:
 
 ### `style`
 
-**Type:** `React.CSSProperties`
+Style object or string applied to the container. Use `fontSize` to control the text size.
 
-Style object applied to the container. Use `fontSize` to control the text size.
+### `onComplete`
+
+**Type:** `() => void`
+
+Callback fired when the animation reaches the end (uncontrolled mode only).
 
 ## Helper functions
 

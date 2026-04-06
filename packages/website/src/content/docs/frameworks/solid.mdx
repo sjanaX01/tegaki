@@ -1,0 +1,157 @@
+---
+title: SolidJS
+description: Using Tegaki with SolidJS for animated handwriting.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { LiveDemo } from '../../../components/solid/LiveDemo.tsx';
+import { LiveDemoControlled } from '../../../components/solid/LiveDemoControlled.tsx';
+
+Tegaki provides a SolidJS component with SSR support and fine-grained reactive updates.
+
+## Installation
+
+<Tabs>
+  <TabItem label="npm">
+    ```sh
+    npm install tegaki solid-js
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```sh
+    pnpm add tegaki solid-js
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```sh
+    bun add tegaki solid-js
+    ```
+  </TabItem>
+</Tabs>
+
+## Basic example
+
+```tsx
+import { TegakiRenderer } from 'tegaki/solid';
+import bundle from 'tegaki/fonts/caveat';
+
+function App() {
+  return (
+    <TegakiRenderer
+      font={bundle}
+      text="Hello World"
+      time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+      style={{ 'font-size': '48px' }}
+    />
+  );
+}
+```
+
+<LiveDemo client:only="solid-js" text="Hello World" />
+
+## Controlled time
+
+Use a signal to drive the animation:
+
+```tsx
+import { createSignal } from 'solid-js';
+import { TegakiRenderer } from 'tegaki/solid';
+import bundle from 'tegaki/fonts/caveat';
+
+function App() {
+  const [time, setTime] = createSignal(0);
+
+  return (
+    <>
+      <input
+        type="range"
+        min={0}
+        max={10}
+        step={0.01}
+        value={time()}
+        onInput={(e) => setTime(Number(e.currentTarget.value))}
+      />
+      <TegakiRenderer
+        font={bundle}
+        text="Scrub me!"
+        time={time()}
+        style={{ 'font-size': '48px' }}
+      />
+    </>
+  );
+}
+```
+
+<LiveDemoControlled client:only="solid-js" />
+
+## Effects
+
+```tsx
+<TegakiRenderer
+  font={bundle}
+  text="Fancy effects"
+  time={{ mode: 'uncontrolled', speed: 1, loop: true }}
+  effects={{
+    glow: { radius: 8, color: '#00ccff' },
+    pressureWidth: true,
+    gradient: { colors: 'rainbow' },
+  }}
+  style={{ 'font-size': '48px' }}
+/>
+```
+
+<LiveDemo
+  client:only="solid-js"
+  text="Fancy effects"
+  effects={{ glow: { radius: 8, color: '#00ccff' }, pressureWidth: true, gradient: { colors: 'rainbow' } }}
+/>
+
+## Streaming text
+
+```tsx
+import { TegakiRenderer } from 'tegaki/solid';
+import bundle from 'tegaki/fonts/caveat';
+
+function StreamingMessage(props: { text: string }) {
+  return (
+    <TegakiRenderer
+      font={bundle}
+      text={props.text}
+      time={{ mode: 'uncontrolled', speed: 4, catchUp: 0.5 }}
+      style={{ 'font-size': '32px' }}
+    />
+  );
+}
+```
+
+## Ref handle
+
+Access the engine via a callback ref:
+
+```tsx
+import { TegakiRenderer, type TegakiRendererHandle } from 'tegaki/solid';
+import bundle from 'tegaki/fonts/caveat';
+
+function App() {
+  let handle: TegakiRendererHandle;
+
+  return (
+    <TegakiRenderer
+      ref={(h) => (handle = h)}
+      font={bundle}
+      text="Hello World"
+      time={{ mode: 'uncontrolled', speed: 1 }}
+      style={{ 'font-size': '48px' }}
+    />
+  );
+}
+```
+
+The handle exposes:
+
+- `handle.engine` — the `TegakiEngine` instance
+- `handle.element` — the container `HTMLDivElement`
+
+## Props
+
+The SolidJS component accepts all [`TegakiEngineOptions`](/tegaki/api/renderer/) plus standard HTML div attributes (`class`, `style`, etc.).

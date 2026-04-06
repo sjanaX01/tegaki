@@ -1,5 +1,8 @@
 import react from '@astrojs/react';
+import solidJs from '@astrojs/solid-js';
 import starlight from '@astrojs/starlight';
+import svelte from '@astrojs/svelte';
+import vue from '@astrojs/vue';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import starlightThemeNova from 'starlight-theme-nova';
@@ -10,7 +13,8 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Tegaki',
-      description: 'Animated handwriting from any Google Font. Generate stroke data, render beautiful writing animations in React.',
+      description:
+        'Animated handwriting from any Google Font. Generate stroke data, render beautiful writing animations in React, Svelte, Vue, SolidJS, Astro, or vanilla JS.',
       logo: { src: './src/assets/tegaki.svg', alt: 'Tegaki logo' },
       head: [{ tag: 'meta', attrs: { property: 'og:image', content: '/tegaki/tegaki-card.png' } }],
       social: [
@@ -22,6 +26,17 @@ export default defineConfig({
         {
           label: 'Getting Started',
           items: [{ label: 'Getting Started', slug: 'getting-started' }],
+        },
+        {
+          label: 'Frameworks',
+          items: [
+            { label: 'React', slug: 'frameworks/react' },
+            { label: 'Svelte', slug: 'frameworks/svelte' },
+            { label: 'Vue', slug: 'frameworks/vue' },
+            { label: 'SolidJS', slug: 'frameworks/solid' },
+            { label: 'Astro', slug: 'frameworks/astro' },
+            { label: 'Vanilla JS', slug: 'frameworks/vanilla' },
+          ],
         },
         {
           label: 'Guides',
@@ -46,14 +61,15 @@ export default defineConfig({
       customCss: ['./src/styles/global.css'],
       plugins: [starlightThemeNova({ stylingSystem: 'tailwind' })],
     }),
-    react(),
+    react({ include: ['**/*.tsx'], exclude: ['**/solid/**'] }),
+    svelte(),
+    vue(),
+    solidJs({ include: ['**/solid/**'] }),
   ],
   vite: {
     plugins: [tailwindcss()],
     resolve: {
-      external: ['tegaki'],
-      conditions: ['tegaki@dev'],
-      externalConditions: ['tegaki@dev'],
+      conditions: ['tegaki@dev', 'browser'],
     },
     build: {
       rollupOptions: {

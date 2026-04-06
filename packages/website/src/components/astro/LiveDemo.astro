@@ -1,0 +1,28 @@
+---
+import TegakiRenderer from 'tegaki/astro';
+import bundle from 'tegaki/fonts/caveat';
+
+interface Props {
+  text?: string;
+  fontSize?: number;
+  time?: any;
+  effects?: Record<string, any>;
+  caption?: string;
+}
+
+const { text = 'Hello World', fontSize = 48, time = { mode: 'uncontrolled', speed: 1, loop: true }, effects, caption } = Astro.props;
+---
+
+<div class="not-content live-demo">
+  <TegakiRenderer font={bundle} bundle loadFont />
+  <div class="live-demo-card">
+    <TegakiRenderer
+      font="Caveat"
+      {text}
+      {time}
+      {effects}
+      style={`font-size: ${fontSize}px`}
+    />
+  </div>
+  {caption && <div class="live-demo-caption">{caption}</div>}
+</div>
