@@ -9,10 +9,12 @@ import type { TegakiBundle } from '../types.ts';
  * - `speed`: playback speed multiplier (uncontrolled mode, default `1`)
  * - `playing`: whether animation is playing (uncontrolled mode, default `true`)
  * - `loop`: loop animation (uncontrolled mode, default `false`)
+ * - `delay`: delay before animation starts (seconds, uncontrolled mode, default `0`)
+ * - `loop-gap`: pause between loop iterations (seconds, uncontrolled mode, default `0`)
  * - `segment-size`: segment size for rendering
  * - `show-overlay`: show debug overlay
  */
-const OBSERVED_ATTRS = ['text', 'font', 'time', 'speed', 'playing', 'loop', 'segment-size', 'show-overlay'] as const;
+const OBSERVED_ATTRS = ['text', 'font', 'time', 'speed', 'playing', 'loop', 'delay', 'loop-gap', 'segment-size', 'show-overlay'] as const;
 
 export class TegakiElement extends HTMLElement {
   static observedAttributes = [...OBSERVED_ATTRS];
@@ -172,13 +174,17 @@ export class TegakiElement extends HTMLElement {
     const hasSpeed = this.hasAttribute('speed');
     const hasPlaying = this.hasAttribute('playing');
     const hasLoop = this.hasAttribute('loop');
+    const hasDelay = this.hasAttribute('delay');
+    const hasLoopGap = this.hasAttribute('loop-gap');
 
-    if (hasSpeed || hasPlaying || hasLoop) {
+    if (hasSpeed || hasPlaying || hasLoop || hasDelay || hasLoopGap) {
       return {
         mode: 'uncontrolled',
         speed: this._getNumberAttr('speed') ?? 1,
         playing: this.getAttribute('playing') !== 'false',
         loop: this.hasAttribute('loop'),
+        delay: this._getNumberAttr('delay'),
+        loopGap: this._getNumberAttr('loop-gap'),
       };
     }
 

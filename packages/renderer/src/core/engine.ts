@@ -39,6 +39,16 @@ export type TimeControlMode = {
     /** Loop animation when it reaches the end. Default: `false` */
     loop?: boolean;
     /**
+     * Delay before the animation starts (seconds). Applied once on
+     * initialization and again on {@link TegakiEngine.restart}. Default: `0`
+     */
+    delay?: number;
+    /**
+     * Pause between loop iterations (seconds). Only effective when
+     * `loop` is `true`. Default: `0`
+     */
+    loopGap?: number;
+    /**
      * Catch-up strength. When positive, playback speeds up when there is a
      * large amount of remaining animation and decays back to normal gradually.
      * `0` disables catch-up (default). Higher values ramp up more aggressively.
@@ -287,6 +297,8 @@ export class TegakiEngine {
   private _cssTime = 0;
   private _playing = true;
   private _smoothedBoost = 0;
+  private _delayRemaining = 0;
+  private _loopGapRemaining = 0;
   private _lastTs: number | null = null;
   private _rafId = 0;
   private _prevCompleted = false;
@@ -412,6 +424,8 @@ export class TegakiEngine {
   seek(time: number): void {
     if (this._timeControl.mode !== 'uncontrolled') return;
     this._internalTime = Math.max(0, Math.min(time, this._timeline.totalDuration));
+    this._delayRemaining = 0;
+    this._loopGapRemaining = 0;
     this._checkCompletion();
     this._notifyTimeChange();
     this._render();
@@ -423,6 +437,8 @@ export class TegakiEngine {
     this._internalTime = 0;
     this._playing = true;
     this._prevCompleted = false;
+    this._delayRemaining = this._timeControl.delay ?? 0;
+    this._loopGapRemaining = 0;
     this._notifyTimeChange();
     this._evaluatePlayback();
   }
@@ -461,13 +477,24 @@ export class TegakiEngine {
       const uncontrolledChanged =
         newTc.mode === 'uncontrolled' &&
         oldTc.mode === 'uncontrolled' &&
-        (newTc.speed !== oldTc.speed || newTc.playing !== oldTc.playing || newTc.loop !== oldTc.loop || newTc.catchUp !== oldTc.catchUp);
+        (newTc.speed !== oldTc.speed ||
+          newTc.playing !== oldTc.playing ||
+          newTc.loop !== oldTc.loop ||
+          newTc.delay !== oldTc.delay ||
+          newTc.loopGap !== oldTc.loopGap ||
+          newTc.catchUp !== oldTc.catchUp);
 
       if (modeChanged || controlledValueChanged || uncontrolledChanged) {
         this._timeControl = newTc;
 
         if (newTc.mode === 'uncontrolled') {
           this._playing = newTc.playing ?? true;
+          const oldDelay = oldTc.mode === 'uncontrolled' ? (oldTc.delay ?? 0) : 0;
+          const newDelay = newTc.delay ?? 0;
+          if (modeChanged || oldDelay !== newDelay) {
+            this._delayRemaining = newDelay;
+            this._loopGapRemaining = 0;
+          }
         }
 
         dirtyPlayback = true;
@@ -769,6 +796,28 @@ export class TegakiEngine {
       return;
     }
 
+    // --- Initial delay ---
+    if (this._delayRemaining > 0) {
+      this._delayRemaining = Math.max(0, this._delayRemaining - dtSec);
+      this._rafId = requestAnimationFrame(this._tick);
+      return;
+    }
+
+    // --- Loop gap (waiting between iterations) ---
+    if (this._loopGapRemaining > 0) {
+      this._loopGapRemaining = Math.max(0, this._loopGapRemaining - dtSec);
+      if (this._loopGapRemaining <= 0) {
+        this._internalTime = 0;
+        this._prevCompleted = false;
+        this._smoothedBoost = 0;
+      }
+      this._notifyTimeChange();
+      this._render();
+      this._updateCssProperties();
+      this._rafId = requestAnimationFrame(this._tick);
+      return;
+    }
+
     // Compute effective speed with catch-up
     let effectiveSpeed = speed;
     if (catchUp > 0) {
@@ -784,7 +833,18 @@ export class TegakiEngine {
 
     let next = this._internalTime + dtSec * effectiveSpeed;
     if (next >= totalDur) {
-      next = loop ? next % totalDur : totalDur;
+      if (loop) {
+        const loopGap = tc.loopGap ?? 0;
+        if (loopGap > 0) {
+          // Hold at the end and start the loop gap countdown
+          next = totalDur;
+          this._loopGapRemaining = loopGap;
+        } else {
+          next = next % totalDur;
+        }
+      } else {
+        next = totalDur;
+      }
       this._smoothedBoost = 0;
     }
     this._internalTime = next;
