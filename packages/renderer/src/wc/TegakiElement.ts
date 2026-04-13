@@ -6,15 +6,31 @@ import type { TegakiBundle } from '../types.ts';
  * - `text`: the text to render (also settable via textContent)
  * - `font`: registered bundle name (see {@link TegakiEngine.registerBundle})
  * - `time`: time control — a number for controlled mode, `"css"` for CSS mode, omit for uncontrolled
- * - `speed`: playback speed multiplier (uncontrolled mode, default `1`)
+ * - `speed`: playback speed multiplier (uncontrolled mode, default `1`). Mutually exclusive with `duration`.
+ * - `duration`: stretch/compress one iteration to this many seconds (uncontrolled mode). Mutually exclusive with `speed`; takes precedence when both are present.
  * - `playing`: whether animation is playing (uncontrolled mode, default `true`)
  * - `loop`: loop animation (uncontrolled mode, default `false`)
  * - `delay`: delay before animation starts (seconds, uncontrolled mode, default `0`)
  * - `loop-gap`: pause between loop iterations (seconds, uncontrolled mode, default `0`)
  * - `segment-size`: segment size for rendering
  * - `show-overlay`: show debug overlay
+ *
+ * The `easing` option is not exposed as an attribute (it takes a function);
+ * set it via the `time` JS property for full uncontrolled-mode configuration.
  */
-const OBSERVED_ATTRS = ['text', 'font', 'time', 'speed', 'playing', 'loop', 'delay', 'loop-gap', 'segment-size', 'show-overlay'] as const;
+const OBSERVED_ATTRS = [
+  'text',
+  'font',
+  'time',
+  'speed',
+  'duration',
+  'playing',
+  'loop',
+  'delay',
+  'loop-gap',
+  'segment-size',
+  'show-overlay',
+] as const;
 
 export class TegakiElement extends HTMLElement {
   static observedAttributes = [...OBSERVED_ATTRS];
@@ -172,20 +188,25 @@ export class TegakiElement extends HTMLElement {
 
     // Check for uncontrolled mode attributes
     const hasSpeed = this.hasAttribute('speed');
+    const hasDuration = this.hasAttribute('duration');
     const hasPlaying = this.hasAttribute('playing');
     const hasLoop = this.hasAttribute('loop');
     const hasDelay = this.hasAttribute('delay');
     const hasLoopGap = this.hasAttribute('loop-gap');
 
-    if (hasSpeed || hasPlaying || hasLoop || hasDelay || hasLoopGap) {
-      return {
-        mode: 'uncontrolled',
-        speed: this._getNumberAttr('speed') ?? 1,
+    if (hasSpeed || hasDuration || hasPlaying || hasLoop || hasDelay || hasLoopGap) {
+      const shared = {
+        mode: 'uncontrolled' as const,
         playing: this.getAttribute('playing') !== 'false',
         loop: this.hasAttribute('loop'),
         delay: this._getNumberAttr('delay'),
         loopGap: this._getNumberAttr('loop-gap'),
       };
+      // Duration takes precedence over speed when both are present.
+      if (hasDuration) {
+        return { ...shared, duration: this._getNumberAttr('duration') };
+      }
+      return { ...shared, speed: this._getNumberAttr('speed') ?? 1 };
     }
 
     return undefined;

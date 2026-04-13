@@ -22,6 +22,37 @@ import type { TegakiBundle, TegakiEffects } from '../types.ts';
 // Time control types (shared with adapters)
 // ---------------------------------------------------------------------------
 
+/** Fields shared by both speed- and duration-paced uncontrolled modes. */
+interface UncontrolledShared {
+  mode: 'uncontrolled';
+  /** Initial time in seconds. Default: `0` */
+  initialTime?: number;
+  /** Whether animation is playing. Default: `true` */
+  playing?: boolean;
+  /** Loop animation when it reaches the end. Default: `false` */
+  loop?: boolean;
+  /**
+   * Delay before the animation starts (seconds). Applied once on
+   * initialization and again on {@link TegakiEngine.restart}. Default: `0`
+   */
+  delay?: number;
+  /**
+   * Pause between loop iterations (seconds). Only effective when
+   * `loop` is `true`. Default: `0`
+   */
+  loopGap?: number;
+  /**
+   * Easing function mapping linear progress `(0–1)` to displayed progress `(0–1)`.
+   * Applied at read-time so `currentTime`, `onTimeChange`, and the CSS custom
+   * properties all reflect the eased value. Completion is evaluated against
+   * linear progress so curves that overshoot or undershoot the endpoints do
+   * not trip completion early or late.
+   */
+  easing?: (t: number) => number;
+  /** Called on every frame with the current (eased) time. */
+  onTimeChange?: (time: number) => void;
+}
+
 export type TimeControlMode = {
   controlled: {
     mode: 'controlled';
@@ -30,36 +61,28 @@ export type TimeControlMode = {
     /** Interpret `value` as seconds (default) or as a 0–1 progress ratio. */
     unit?: 'seconds' | 'progress';
   };
-  uncontrolled: {
-    mode: 'uncontrolled';
-    /** Initial time in seconds. Default: `0` */
-    initialTime?: number;
-    /** Playback speed multiplier. Default: `1` */
-    speed?: number;
-    /** Whether animation is playing. Default: `true` */
-    playing?: boolean;
-    /** Loop animation when it reaches the end. Default: `false` */
-    loop?: boolean;
-    /**
-     * Delay before the animation starts (seconds). Applied once on
-     * initialization and again on {@link TegakiEngine.restart}. Default: `0`
-     */
-    delay?: number;
-    /**
-     * Pause between loop iterations (seconds). Only effective when
-     * `loop` is `true`. Default: `0`
-     */
-    loopGap?: number;
-    /**
-     * Catch-up strength. When positive, playback speeds up when there is a
-     * large amount of remaining animation and decays back to normal gradually.
-     * `0` disables catch-up (default). Higher values ramp up more aggressively.
-     * Typical range: `0.2` – `2`.
-     */
-    catchUp?: number;
-    /** Called on every frame with the current time. */
-    onTimeChange?: (time: number) => void;
-  };
+  uncontrolled:
+    | (UncontrolledShared & {
+        /** Playback speed multiplier. Default: `1` */
+        speed?: number;
+        /**
+         * Catch-up strength. When positive, playback speeds up when there is a
+         * large amount of remaining animation and decays back to normal gradually.
+         * `0` disables catch-up (default). Higher values ramp up more aggressively.
+         * Typical range: `0.2` – `2`.
+         */
+        catchUp?: number;
+        duration?: never;
+      })
+    | (UncontrolledShared & {
+        /**
+         * Stretch or compress playback so one iteration takes exactly this many
+         * seconds. Mutually exclusive with `speed` / `catchUp`.
+         */
+        duration?: number;
+        speed?: never;
+        catchUp?: never;
+      });
   css: {
     mode: 'css';
   };
@@ -102,16 +125,19 @@ function buildRootProps(options: TegakiEngineOptions): Record<string, any> {
   const fontFamily = font?.family;
 
   const duration = text && font ? computeTimeline(text, font, options.timing).totalDuration : 0;
-  const time =
+  const timeObj = typeof options.time === 'object' ? options.time : null;
+  const rawTime =
     typeof options.time === 'number'
       ? options.time
-      : typeof options.time === 'object' && options.time?.mode === 'controlled'
-        ? options.time.unit === 'progress'
-          ? options.time.value * duration
-          : options.time.value
-        : typeof options.time === 'object' && options.time?.mode === 'uncontrolled'
-          ? (options.time.initialTime ?? 0)
+      : timeObj?.mode === 'controlled'
+        ? timeObj.unit === 'progress'
+          ? timeObj.value * duration
+          : timeObj.value
+        : timeObj?.mode === 'uncontrolled'
+          ? (timeObj.initialTime ?? 0)
           : 0;
+  const easing = timeObj?.mode === 'uncontrolled' ? timeObj.easing : undefined;
+  const time = easing && duration > 0 ? easing(rawTime / duration) * duration : rawTime;
   const progress = duration > 0 ? time / duration : 0;
 
   return {
@@ -395,6 +421,10 @@ export class TegakiEngine {
     const tc = this._timeControl;
     if (tc.mode === 'css') return this._cssTime;
     if (tc.mode === 'controlled') return tc.unit === 'progress' ? tc.value * this._timeline.totalDuration : tc.value;
+    const totalDur = this._timeline.totalDuration;
+    if (tc.easing && totalDur > 0) {
+      return tc.easing(this._internalTime / totalDur) * totalDur;
+    }
     return this._internalTime;
   }
 
@@ -407,7 +437,13 @@ export class TegakiEngine {
   }
 
   get isComplete(): boolean {
-    return this._timeline.totalDuration > 0 && this.currentTime >= this._timeline.totalDuration;
+    const totalDur = this._timeline.totalDuration;
+    if (totalDur === 0) return false;
+    // For uncontrolled, check linear time so easing curves that overshoot/undershoot
+    // the endpoints do not prematurely/belatedly trip completion.
+    const tc = this._timeControl;
+    if (tc.mode === 'uncontrolled') return this._internalTime >= totalDur;
+    return this.currentTime >= totalDur;
   }
 
   get element(): HTMLElement {
@@ -484,11 +520,13 @@ export class TegakiEngine {
         newTc.mode === 'uncontrolled' &&
         oldTc.mode === 'uncontrolled' &&
         (newTc.speed !== oldTc.speed ||
+          newTc.duration !== oldTc.duration ||
           newTc.playing !== oldTc.playing ||
           newTc.loop !== oldTc.loop ||
           newTc.delay !== oldTc.delay ||
           newTc.loopGap !== oldTc.loopGap ||
-          newTc.catchUp !== oldTc.catchUp);
+          newTc.catchUp !== oldTc.catchUp ||
+          newTc.easing !== oldTc.easing);
 
       if (modeChanged || controlledValueChanged || uncontrolledChanged) {
         this._timeControl = newTc;
@@ -793,10 +831,10 @@ export class TegakiEngine {
     const tc = this._timeControl;
     if (tc.mode !== 'uncontrolled') return;
 
-    const speed = tc.speed ?? 1;
     const loop = tc.loop ?? false;
-    const catchUp = tc.catchUp ?? 0;
     const totalDur = this._timeline.totalDuration;
+    const durationOverride = tc.duration;
+    const useDuration = durationOverride !== undefined && durationOverride > 0;
 
     if (totalDur === 0 || (!loop && this._internalTime >= totalDur)) {
       this._internalTime = totalDur;
@@ -826,17 +864,25 @@ export class TegakiEngine {
       return;
     }
 
-    // Compute effective speed with catch-up
-    let effectiveSpeed = speed;
-    if (catchUp > 0) {
-      const remaining = Math.max(0, totalDur - this._internalTime);
-      const excess = Math.max(0, remaining - 2);
-      const targetBoost = catchUp * excess;
-      const attackRate = 4;
-      const releaseRate = loop ? 30 : 2;
-      const rate = targetBoost > this._smoothedBoost ? attackRate : releaseRate;
-      this._smoothedBoost += (targetBoost - this._smoothedBoost) * (1 - Math.exp(-rate * dtSec));
-      effectiveSpeed = speed + this._smoothedBoost;
+    // Compute effective speed. `duration` stretches the natural timeline to fit
+    // a fixed wall-clock slot; otherwise use `speed` + optional `catchUp`.
+    let effectiveSpeed: number;
+    if (useDuration) {
+      effectiveSpeed = totalDur / durationOverride;
+    } else {
+      const speed = tc.speed ?? 1;
+      const catchUp = tc.catchUp ?? 0;
+      effectiveSpeed = speed;
+      if (catchUp > 0) {
+        const remaining = Math.max(0, totalDur - this._internalTime);
+        const excess = Math.max(0, remaining - 2);
+        const targetBoost = catchUp * excess;
+        const attackRate = 4;
+        const releaseRate = loop ? 30 : 2;
+        const rate = targetBoost > this._smoothedBoost ? attackRate : releaseRate;
+        this._smoothedBoost += (targetBoost - this._smoothedBoost) * (1 - Math.exp(-rate * dtSec));
+        effectiveSpeed = speed + this._smoothedBoost;
+      }
     }
 
     let next = this._internalTime + dtSec * effectiveSpeed;
@@ -868,12 +914,13 @@ export class TegakiEngine {
   private _notifyTimeChange(): void {
     const tc = this._timeControl;
     if (tc.mode === 'uncontrolled' && tc.onTimeChange) {
-      tc.onTimeChange(this._internalTime);
+      // Emit eased time so it matches what's drawn and what CSS variables expose.
+      tc.onTimeChange(this.currentTime);
     }
   }
 
   private _checkCompletion(): void {
-    const complete = this._timeline.totalDuration > 0 && this.currentTime >= this._timeline.totalDuration;
+    const complete = this.isComplete;
     if (complete && !this._prevCompleted) {
       this._prevCompleted = true;
       this._onComplete?.();
