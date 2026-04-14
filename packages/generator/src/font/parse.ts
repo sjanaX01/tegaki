@@ -36,7 +36,12 @@ export interface RawGlyphData {
  * 5. Default → round (handwriting tool bias)
  */
 export function inferLineCap(font: opentype.Font): LineCap {
-  const os2 = font.tables.os2 as { sFamilyClass?: number; panose?: number[] } | undefined;
+  const os2 = font.tables.os2 as { sFamilyClass?: number; panose?: number[]; ulUnicodeRange2?: number } | undefined;
+
+  // CJK fonts look better with round caps regardless of PANOSE classification
+  // ulUnicodeRange2 bits: 17=Hiragana, 18=Katakana, 24=Hangul Syllables, 27=CJK Unified Ideographs
+  const cjkBits = (1 << 17) | (1 << 18) | (1 << 24) | (1 << 27);
+  if (os2?.ulUnicodeRange2 && os2.ulUnicodeRange2 & cjkBits) return 'round';
 
   if (os2?.panose) {
     const familyKind = os2.panose[0] ?? 0;

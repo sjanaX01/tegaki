@@ -1288,7 +1288,7 @@ function TextPreview({
 
     return {
       family: fontInfo.family,
-      lineCap: fontInfo.lineCap,
+      lineCap: options.lineCap === 'auto' ? fontInfo.lineCap : options.lineCap,
       fontUrl,
       fontFaceCSS: `@font-face { font-family: '${fontInfo.family}'; src: url(${fontUrl}); }`,
       unitsPerEm: fontInfo.unitsPerEm,

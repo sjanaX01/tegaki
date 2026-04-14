@@ -68,6 +68,9 @@ export default defineConfig({
     vue(),
     solidJs({ include: ['**/solid/**'] }),
   ],
+  devToolbar: {
+    enabled: false,
+  },
   vite: {
     plugins: [tailwindcss()],
     resolve: {
