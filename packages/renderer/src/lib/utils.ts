@@ -11,6 +11,7 @@ export function resolveCSSLength(value: CSSLength, fontSize: number): number {
 export function graphemes(text: string): string[] {
   return Array.from(segmenter.segment(text), (s) => s.segment);
 }
+
 export type Coercible = string | number | boolean | null | undefined | readonly Coercible[];
 
 export function coerceToString(value: unknown): string {

@@ -1,4 +1,7 @@
 import { zipSync } from 'fflate';
+
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeTimeline, type LineCap, type TegakiBundle, TegakiRenderer, type TegakiRendererHandle, type TimeControlProp } from 'tegaki';
 import {
@@ -500,15 +503,18 @@ export function PreviewApp() {
                   type="button"
                   className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
                   onClick={() => {
-                    const allChars: string[] = [];
-                    for (let i = 0; i < fontInfo.font.glyphs.length; i++) {
-                      const g = fontInfo.font.glyphs.get(i);
-                      if (g.index !== 0 && g.unicode != null) {
-                        const ch = String.fromCodePoint(g.unicode);
-                        if (ch.trim()) allChars.push(ch);
+                    const charSet = new Set<string>();
+                    const fonts = [fontInfo.font, ...(fontInfo.extraFonts ?? [])];
+                    for (const f of fonts) {
+                      for (let i = 0; i < f.glyphs.length; i++) {
+                        const g = f.glyphs.get(i);
+                        if (g.index !== 0 && g.unicode != null) {
+                          const ch = String.fromCodePoint(g.unicode);
+                          if (ch.trim()) charSet.add(ch);
+                        }
                       }
                     }
-                    allChars.sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!);
+                    const allChars = [...charSet].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!);
                     setChars(allChars.join(''));
                   }}
                 >
@@ -519,7 +525,17 @@ export function PreviewApp() {
             <textarea
               className="px-2 py-1 border border-gray-300 rounded text-sm font-mono h-16 resize-y"
               value={chars}
-              onChange={(e) => setChars(e.target.value)}
+              onChange={(e) => {
+                const seen = new Set<string>();
+                const unique: string[] = [];
+                for (const { segment } of segmenter.segment(e.target.value)) {
+                  if (!seen.has(segment)) {
+                    seen.add(segment);
+                    unique.push(segment);
+                  }
+                }
+                setChars(unique.join(''));
+              }}
             />
           </fieldset>
 
