@@ -118,9 +118,7 @@
     "prepack": "bun run build && bun ../../scripts/prepareForRelease.ts",
     "generate-fonts": "bun --filter tegaki-generator start generate Caveat --output ../renderer/fonts/caveat && bun --filter tegaki-generator start generate Italianno --output ../renderer/fonts/italianno && bun --filter tegaki-generator start generate Tangerine --output ../renderer/fonts/tangerine && bun --filter tegaki-generator start generate Parisienne --output ../renderer/fonts/parisienne"
   },
-  "dependencies": {
-    "@chenglou/pretext": "^0.0.5"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "react": ">=18",
     "svelte": ">=5",

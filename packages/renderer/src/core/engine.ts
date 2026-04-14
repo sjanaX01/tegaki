@@ -72,6 +72,7 @@ export class TegakiEngine {
   private _seed: number;
   private _timeline: Timeline = { entries: [] as TimelineEntry[], totalDuration: 0 };
   private _layout: TextLayout | null = null;
+  private _layoutKey = '';
   private _fontReady = false;
 
   // --- Measured from DOM ---
@@ -334,12 +335,10 @@ export class TegakiEngine {
 
     // --- Recompute ---
     if (dirtyTimeline) this._recomputeTimeline();
+    if (dirtyRender || dirtyTimeline || dirtyLayout) this._updateDom();
     if (dirtyLayout) this._recomputeLayout();
     if (dirtyPlayback) this._evaluatePlayback();
-    if (dirtyRender || dirtyTimeline || dirtyLayout) {
-      this._updateDom();
-      this._render();
-    }
+    if (dirtyRender || dirtyTimeline || dirtyLayout) this._render();
   }
 
   destroy(): void {
@@ -520,9 +519,9 @@ export class TegakiEngine {
       if (this._font === currentFont && !this._destroyed) {
         this._fontReady = true;
         this._recomputeTimeline();
+        this._updateDom();
         this._recomputeLayout();
         this._evaluatePlayback();
-        this._updateDom();
         this._render();
       }
     });
@@ -541,77 +540,15 @@ export class TegakiEngine {
   }
 
   private _recomputeLayout(): void {
-    const fontFamily = this._font?.family;
-    if (this._fontReady && fontFamily && this._fontSize && this._containerWidth && this._text) {
-      const layout = computeTextLayout(this._text, fontFamily, this._fontSize, this._lineHeight, this._containerWidth);
-
-      // Canvas measureText can return wider widths than CSS text shaping
-      // (common with CJK fallback fonts), causing the computed layout to
-      // wrap into more lines than the overlay actually renders.  Use the
-      // overlay's real line breaks so the canvas drawing matches the CSS
-      // layout and fits within the visible canvas area.
-      const overlayLines = this._detectOverlayLines();
-      if (overlayLines) layout.lines = overlayLines;
-
-      this._layout = layout;
+    if (this._fontReady && this._font?.family && this._fontSize && this._containerWidth && this._text) {
+      const key = `${this._text}\0${this._font.family}\0${this._fontSize}\0${this._lineHeight}\0${this._containerWidth}`;
+      if (key === this._layoutKey) return;
+      this._layoutKey = key;
+      this._layout = computeTextLayout(this._overlayEl, this._fontSize);
     } else {
+      this._layoutKey = '';
       this._layout = null;
     }
-  }
-
-  /**
-   * Read the overlay element's actual CSS line breaks via the Range API.
-   * Returns grapheme-index arrays per line, or null if detection fails.
-   */
-  private _detectOverlayLines(): number[][] | null {
-    const textNode = this._overlayEl.firstChild;
-    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
-
-    const chars = graphemes(this._text);
-    if (!chars.length || !this._fontSize) return null;
-
-    const range = document.createRange();
-    const lines: number[][] = [];
-    let currentLine: number[] = [];
-    let prevTop = -Infinity;
-    let utf16Offset = 0;
-
-    for (let i = 0; i < chars.length; i++) {
-      const char = chars[i]!;
-
-      if (char === '\n') {
-        currentLine.push(i);
-        lines.push(currentLine);
-        currentLine = [];
-        prevTop = -Infinity;
-        utf16Offset += char.length;
-        continue;
-      }
-
-      range.setStart(textNode, utf16Offset);
-      range.setEnd(textNode, utf16Offset + char.length);
-      const rects = range.getClientRects();
-      utf16Offset += char.length;
-
-      if (rects.length === 0) {
-        currentLine.push(i);
-        continue;
-      }
-
-      const rect = rects[0]!;
-
-      // A significant vertical shift signals a new line.
-      if (currentLine.length > 0 && rect.top - prevTop > this._fontSize * 0.25) {
-        lines.push(currentLine);
-        currentLine = [];
-      }
-
-      if (currentLine.length === 0) prevTop = rect.top;
-      currentLine.push(i);
-    }
-    if (currentLine.length > 0) lines.push(currentLine);
-
-    return lines.length > 0 ? lines : null;
   }
 
   // =========================================================================
@@ -798,13 +735,11 @@ export class TegakiEngine {
 
     let y = 0;
     for (const lineIndices of layout.lines) {
-      let x = 0;
       for (const charIdx of lineIndices) {
         const char = characters[charIdx]!;
         if (char === '\n') continue;
         const entry = this._timeline.entries[charIdx]!;
-        const charWidth = layout.charWidths[charIdx] ?? 0;
-        const kerning = layout.kernings[charIdx] ?? 0;
+        const x = (layout.charOffsets[charIdx] ?? 0) * fontSize;
         const glyph = font.glyphData[char];
 
         if (glyph && entry.hasGlyph) {
@@ -832,8 +767,6 @@ export class TegakiEngine {
           const baseline = y + halfLeading + (font.ascender / font.unitsPerEm) * fontSize;
           drawFallbackGlyph(ctx, char, x, baseline, fontSize, font.family, color, this._resolvedEffects, this._seed + charIdx);
         }
-
-        x += (charWidth + kerning) * fontSize;
       }
       y += lineHeight;
     }

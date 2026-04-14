@@ -1,114 +1,122 @@
-import { layoutWithLines, prepareWithSegments } from '@chenglou/pretext';
 import { graphemes } from './utils.ts';
 
 export interface TextLayout {
   /** Character indices per line */
   lines: number[][];
+  /** X offset within line in em per character index */
+  charOffsets: number[];
   /** Width in em per character index */
   charWidths: number[];
-  /** Kerning adjustment in em between character at index i and i+1 */
-  kernings: number[];
-  /** Intrinsic (single-line) width in em */
-  intrinsicWidth: number;
 }
 
-export function computeTextLayout(text: string, fontFamily: string, fontSize: number, lineHeight: number, maxWidth: number): TextLayout {
-  const fontStr = `${fontSize}px ${fontFamily}`;
+/**
+ * Measure text layout using the Range API on an existing DOM element.
+ * The element must already be in the document with correct text content,
+ * font, line-height, white-space, and width styles applied.
+ */
+export function computeTextLayout(el: HTMLElement, fontSize: number): TextLayout;
+/**
+ * Measure text layout by creating a temporary off-screen DOM element.
+ */
+export function computeTextLayout(text: string, fontSize: number, fontFamily: string, lineHeight: number, maxWidth: number): TextLayout;
+export function computeTextLayout(
+  elOrText: HTMLElement | string,
+  fontSize: number,
+  fontFamily?: string,
+  lineHeight?: number,
+  maxWidth?: number,
+): TextLayout {
+  if (typeof elOrText === 'string') {
+    return measureWithTempElement(elOrText, fontFamily!, fontSize, lineHeight!, maxWidth!);
+  }
+  return measureElement(elOrText, fontSize);
+}
+
+function measureElement(el: HTMLElement, fontSize: number): TextLayout {
+  const textNode = el.firstChild;
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+    return { lines: [], charOffsets: [], charWidths: [] };
+  }
+
+  const text = textNode.textContent ?? '';
   const chars = graphemes(text);
+  if (!chars.length) return { lines: [], charOffsets: [], charWidths: [] };
 
-  // Measure unique character widths
-  const widthCache = new Map<string, number>();
+  const range = document.createRange();
+
+  const charOffsets: number[] = [];
   const charWidths: number[] = [];
-  for (const char of chars) {
-    let w = widthCache.get(char);
-    if (w === undefined) {
-      if (char === '\n') {
-        w = 0;
-      } else {
-        const p = prepareWithSegments(char, fontStr, { whiteSpace: 'pre-wrap' });
-        const r = layoutWithLines(p, Infinity, lineHeight);
-        w = r.lines.length > 0 ? r.lines[0]!.width / fontSize : 0;
-      }
-      widthCache.set(char, w);
-    }
-    charWidths.push(w);
-  }
-
-  // Compute intrinsic width (single-line, no wrapping)
-  const prepared = prepareWithSegments(text, fontStr, { whiteSpace: 'pre-wrap' });
-  const singleLineResult = layoutWithLines(prepared, Infinity, lineHeight);
-  const intrinsicWidth = Math.max(0, ...singleLineResult.lines.map((l) => l.width)) / fontSize;
-
-  // Line breaking at actual available width
-  const result = layoutWithLines(prepared, maxWidth, lineHeight);
-
-  // Map line texts back to character indices (grapheme-based)
-  // Build a mapping from UTF-16 offset to grapheme index
-  const utf16ToCodePoint: number[] = [];
-  for (let ci = 0; ci < chars.length; ci++) {
-    for (let j = 0; j < chars[ci]!.length; j++) {
-      utf16ToCodePoint.push(ci);
-    }
-  }
-
   const lines: number[][] = [];
+  let currentLine: number[] = [];
+  let prevTop = -Infinity;
+  let lineStartX = 0;
   let utf16Offset = 0;
-  for (const line of result.lines) {
-    const indices: number[] = [];
-    const seen = new Set<number>();
-    for (let i = 0; i < line.text.length; i++) {
-      const cpIdx = utf16ToCodePoint[utf16Offset + i]!;
-      if (!seen.has(cpIdx)) {
-        seen.add(cpIdx);
-        indices.push(cpIdx);
-      }
-    }
-    utf16Offset += line.text.length;
-    // Consume the newline that caused this line break
-    if (utf16Offset < text.length && text[utf16Offset] === '\n') {
-      const cpIdx = utf16ToCodePoint[utf16Offset]!;
-      indices.push(cpIdx);
-      utf16Offset++;
-    }
-    lines.push(indices);
-  }
 
-  // Any remaining characters (shouldn't happen, but safety)
-  if (utf16Offset < text.length) {
-    const indices: number[] = [];
-    const seen = new Set<number>();
-    for (let i = utf16Offset; i < text.length; i++) {
-      const cpIdx = utf16ToCodePoint[i]!;
-      if (!seen.has(cpIdx)) {
-        seen.add(cpIdx);
-        indices.push(cpIdx);
-      }
-    }
-    lines.push(indices);
-  }
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i]!;
 
-  // Measure kerning between adjacent character pairs
-  const kernings: number[] = [];
-  const pairCache = new Map<string, number>();
-  for (let i = 0; i < chars.length - 1; i++) {
-    const a = chars[i]!;
-    const b = chars[i + 1]!;
-    if (a === '\n' || b === '\n') {
-      kernings.push(0);
+    if (char === '\n') {
+      charOffsets.push(0);
+      charWidths.push(0);
+      currentLine.push(i);
+      lines.push(currentLine);
+      currentLine = [];
+      prevTop = -Infinity;
+      utf16Offset += char.length;
       continue;
     }
-    const pair = `${a}${b}`;
-    let k = pairCache.get(pair);
-    if (k === undefined) {
-      const p = prepareWithSegments(pair, fontStr, { whiteSpace: 'pre-wrap' });
-      const r = layoutWithLines(p, Infinity, lineHeight);
-      const pairWidth = r.lines.length > 0 ? r.lines[0]!.width / fontSize : 0;
-      k = pairWidth - (widthCache.get(a) ?? 0) - (widthCache.get(b) ?? 0);
-      if (Math.abs(k) < 0.001) k = 0;
-      pairCache.set(pair, k);
-    }
-    kernings.push(k);
-  }
 
-  return { lines, charWidths, kernings, intrinsicWidth };
+    range.setStart(textNode, utf16Offset);
+    range.setEnd(textNode, utf16Offset + char.length);
+    const rects = range.getClientRects();
+    utf16Offset += char.length;
+
+    if (rects.length === 0) {
+      charOffsets.push(0);
+      charWidths.push(0);
+      currentLine.push(i);
+      continue;
+    }
+
+    const rect = rects[0]!;
+
+    // A significant vertical shift signals a new line
+    if (currentLine.length > 0 && rect.top - prevTop > fontSize * 0.25) {
+      lines.push(currentLine);
+      currentLine = [];
+    }
+
+    if (currentLine.length === 0) {
+      prevTop = rect.top;
+      lineStartX = rect.left;
+    }
+
+    charOffsets.push((rect.left - lineStartX) / fontSize);
+    charWidths.push(rect.width / fontSize);
+    currentLine.push(i);
+  }
+  if (currentLine.length > 0) lines.push(currentLine);
+
+  return { lines, charOffsets, charWidths };
+}
+
+function measureWithTempElement(text: string, fontFamily: string, fontSize: number, lineHeight: number, maxWidth: number): TextLayout {
+  const el = document.createElement('div');
+  el.style.position = 'absolute';
+  el.style.left = '-9999px';
+  el.style.top = '-9999px';
+  el.style.visibility = 'hidden';
+  el.style.fontFamily = fontFamily;
+  el.style.fontSize = `${fontSize}px`;
+  el.style.lineHeight = `${lineHeight}px`;
+  el.style.whiteSpace = 'pre-wrap';
+  el.style.overflowWrap = 'break-word';
+  el.style.width = `${maxWidth}px`;
+  el.textContent = text;
+  document.body.appendChild(el);
+
+  const result = measureElement(el, fontSize);
+
+  document.body.removeChild(el);
+  return result;
 }
