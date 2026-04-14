@@ -1,6 +1,7 @@
 <script lang="ts">
 import { untrack } from 'svelte';
-import { TegakiEngine, type TegakiEngineOptions } from '../core/engine.ts';
+import { TegakiEngine } from '../core/engine.ts';
+import type { TegakiEngineOptions } from '../core/types.ts';
 import type { TegakiEffects } from '../types.ts';
 
 interface Props extends Omit<TegakiEngineOptions, 'effects'> {

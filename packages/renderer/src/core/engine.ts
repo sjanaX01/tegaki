@@ -16,243 +16,10 @@ import { computeTextLayout } from '../lib/textLayout.ts';
 import type { Timeline, TimelineConfig, TimelineEntry } from '../lib/timeline.ts';
 import { computeTimeline } from '../lib/timeline.ts';
 import { graphemes } from '../lib/utils.ts';
-import type { TegakiBundle, TegakiEffects } from '../types.ts';
-
-// ---------------------------------------------------------------------------
-// Time control types (shared with adapters)
-// ---------------------------------------------------------------------------
-
-/** Fields shared by both speed- and duration-paced uncontrolled modes. */
-interface UncontrolledShared {
-  mode: 'uncontrolled';
-  /** Initial time in seconds. Default: `0` */
-  initialTime?: number;
-  /** Whether animation is playing. Default: `true` */
-  playing?: boolean;
-  /** Loop animation when it reaches the end. Default: `false` */
-  loop?: boolean;
-  /**
-   * Delay before the animation starts (seconds). Applied once on
-   * initialization and again on {@link TegakiEngine.restart}. Default: `0`
-   */
-  delay?: number;
-  /**
-   * Pause between loop iterations (seconds). Only effective when
-   * `loop` is `true`. Default: `0`
-   */
-  loopGap?: number;
-  /**
-   * Easing function mapping linear progress `(0–1)` to displayed progress `(0–1)`.
-   * Applied at read-time so `currentTime`, `onTimeChange`, and the CSS custom
-   * properties all reflect the eased value. Completion is evaluated against
-   * linear progress so curves that overshoot or undershoot the endpoints do
-   * not trip completion early or late.
-   */
-  easing?: (t: number) => number;
-  /** Called on every frame with the current (eased) time. */
-  onTimeChange?: (time: number) => void;
-}
-
-export type TimeControlMode = {
-  controlled: {
-    mode: 'controlled';
-    /** Current time in seconds (default), or progress 0–1 when `unit` is `'progress'`. */
-    value: number;
-    /** Interpret `value` as seconds (default) or as a 0–1 progress ratio. */
-    unit?: 'seconds' | 'progress';
-  };
-  uncontrolled:
-    | (UncontrolledShared & {
-        /** Playback speed multiplier. Default: `1` */
-        speed?: number;
-        /**
-         * Catch-up strength. When positive, playback speeds up when there is a
-         * large amount of remaining animation and decays back to normal gradually.
-         * `0` disables catch-up (default). Higher values ramp up more aggressively.
-         * Typical range: `0.2` – `2`.
-         */
-        catchUp?: number;
-        duration?: never;
-      })
-    | (UncontrolledShared & {
-        /**
-         * Stretch or compress playback so one iteration takes exactly this many
-         * seconds. Mutually exclusive with `speed` / `catchUp`.
-         */
-        duration?: number;
-        speed?: never;
-        catchUp?: never;
-      });
-  css: {
-    mode: 'css';
-  };
-};
-
-/**
- * A plain number is shorthand for `{ mode: 'controlled', value: number }`.
- * `'css'` is shorthand for `{ mode: 'css' }`.
- * Omit for uncontrolled mode with default settings.
- */
-export type TimeControlProp = null | undefined | number | 'css' | TimeControlMode[keyof TimeControlMode];
-
-// ---------------------------------------------------------------------------
-// Engine options
-// ---------------------------------------------------------------------------
-
-export interface TegakiEngineOptions {
-  text?: string;
-  /** A font bundle, or a registered bundle name (see {@link TegakiEngine.registerBundle}). */
-  font?: TegakiBundle | string;
-  time?: TimeControlProp;
-  effects?: TegakiEffects<Record<string, any>>;
-  timing?: TimelineConfig;
-  segmentSize?: number;
-  showOverlay?: boolean;
-  onComplete?: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Render elements
-// ---------------------------------------------------------------------------
-
-export type CreateElementFn<T> = (tag: string, props: Record<string, any>, ...children: (T | string)[]) => T;
-
-const PAD_V_CSS = 'max(0.2em, 0.9em - 0.5lh)';
-
-function buildRootProps(options: TegakiEngineOptions): Record<string, any> {
-  const text = options.text ?? '';
-  const font = resolveBundle(options.font);
-  const fontFamily = font?.family;
-
-  const duration = text && font ? computeTimeline(text, font, options.timing).totalDuration : 0;
-  const timeObj = typeof options.time === 'object' ? options.time : null;
-  const rawTime =
-    typeof options.time === 'number'
-      ? options.time
-      : timeObj?.mode === 'controlled'
-        ? timeObj.unit === 'progress'
-          ? timeObj.value * duration
-          : timeObj.value
-        : timeObj?.mode === 'uncontrolled'
-          ? (timeObj.initialTime ?? 0)
-          : 0;
-  const easing = timeObj?.mode === 'uncontrolled' ? timeObj.easing : undefined;
-  const time = easing && duration > 0 ? easing(rawTime / duration) * duration : rawTime;
-  const progress = duration > 0 ? time / duration : 0;
-
-  return {
-    'data-tegaki': 'root',
-    style: {
-      position: 'relative',
-      maxWidth: '100%',
-      width: 'auto',
-      height: 'auto',
-      fontFamily: fontFamily ?? undefined,
-      [CSS_DURATION]: duration,
-      [CSS_TIME]: time,
-      [CSS_PROGRESS]: progress,
-    },
-  };
-}
-
-function buildChildren<T>(options: TegakiEngineOptions, h: CreateElementFn<T>): T {
-  const text = options.text ?? '';
-  const isCss = options.time === 'css' || (typeof options.time === 'object' && options.time?.mode === 'css');
-  const showOverlay = options.showOverlay;
-
-  return h(
-    'span',
-    { style: { display: 'block', position: 'relative' } },
-    h('span', {
-      'data-tegaki': 'sentinel',
-      'aria-hidden': 'true',
-      style: {
-        position: 'absolute',
-        width: 0,
-        overflow: 'hidden',
-        pointerEvents: 'none',
-        fontSize: 'inherit',
-        lineHeight: 'inherit',
-        visibility: 'hidden',
-        transition: isCss
-          ? `font-size 0.001s, line-height 0.001s, color 0.001s, ${CSS_PROGRESS} 0.001s`
-          : 'font-size 0.001s, line-height 0.001s, color 0.001s',
-      },
-    }),
-    h(
-      'canvas',
-      {
-        'data-tegaki': 'canvas',
-        'aria-hidden': 'true',
-        style: {
-          position: 'absolute',
-          inset: `calc(-1 * ${PAD_V_CSS}) -0.2em`,
-          width: 'calc(100% + 0.4em)',
-          height: `calc(100% + 2 * ${PAD_V_CSS})`,
-          pointerEvents: 'none',
-          overflow: 'visible',
-        },
-      },
-      h(
-        'span',
-        {
-          'data-tegaki': 'canvas-fallback',
-          style: { display: 'inline-block', padding: `${PAD_V_CSS} 0.2em` },
-        },
-        text,
-      ),
-    ),
-    h(
-      'span',
-      {
-        'data-tegaki': 'overlay',
-        style: {
-          display: 'block',
-          userSelect: 'auto',
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'break-word',
-          paddingRight: 1,
-          WebkitTextFillColor: showOverlay ? undefined : 'transparent',
-          color: showOverlay ? 'rgba(255, 0, 0, 0.4)' : undefined,
-        },
-      },
-      text,
-    ),
-  );
-}
-
-// ---------------------------------------------------------------------------
-// DOM createElement helper (for vanilla JS constructor)
-// ---------------------------------------------------------------------------
-
-function domCreateElement(tag: string, props: Record<string, any>, ...children: (HTMLElement | string)[]): HTMLElement {
-  const el = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (key === 'style' && typeof value === 'object') {
-      for (const [k, v] of Object.entries(value as Record<string, any>)) {
-        if (v !== undefined && v !== null) {
-          if (k.startsWith('--')) {
-            el.style.setProperty(k, String(v));
-          } else {
-            (el.style as any)[k] = typeof v === 'number' && k !== 'opacity' && k !== 'zIndex' ? `${v}px` : v;
-          }
-        }
-      }
-    } else if (key === 'aria-hidden') {
-      el.setAttribute('aria-hidden', String(value));
-    } else if (key.startsWith('data-')) {
-      el.setAttribute(key, String(value));
-    }
-  }
-  for (const child of children) {
-    if (typeof child === 'string') {
-      el.appendChild(document.createTextNode(child));
-    } else {
-      el.appendChild(child);
-    }
-  }
-  return el;
-}
+import type { TegakiBundle } from '../types.ts';
+import { getBundle, registerBundle as registryRegisterBundle, resolveBundle } from './bundle-registry.ts';
+import { buildChildren, buildRootProps, domCreateElement } from './render-elements.ts';
+import type { CreateElementFn, TegakiEngineOptions, TimeControlMode, TimeControlProp } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -269,27 +36,17 @@ function resolveTimeControl(prop: TimeControlProp): TimeControlMode[keyof TimeCo
 // TegakiEngine
 // ---------------------------------------------------------------------------
 
-function resolveBundle(font: TegakiBundle | string | undefined): TegakiBundle | undefined {
-  if (typeof font === 'string') {
-    const bundle = TegakiEngine.getBundle(font);
-    if (!bundle) throw new Error(`TegakiEngine: no bundle registered for "${font}". Call TegakiEngine.registerBundle() first.`);
-    return bundle;
-  }
-  return font;
-}
-
 export class TegakiEngine {
-  // --- Bundle registry ---
-  private static _bundles = new Map<string, TegakiBundle>();
+  // --- Bundle registry (delegates to bundle-registry module) ---
 
   /** Register a font bundle so it can be referenced by family name. */
   static registerBundle(bundle: TegakiBundle): void {
-    TegakiEngine._bundles.set(bundle.family, bundle);
+    registryRegisterBundle(bundle);
   }
 
   /** Look up a registered bundle by family name. */
   static getBundle(family: string): TegakiBundle | undefined {
-    return TegakiEngine._bundles.get(family);
+    return getBundle(family);
   }
 
   // --- DOM elements ---

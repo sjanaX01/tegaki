@@ -1,4 +1,5 @@
-import { TegakiEngine, type TegakiEngineOptions, type TimeControlProp } from '../core/engine.ts';
+import { TegakiEngine } from '../core/engine.ts';
+import type { TegakiEngineOptions, TimeControlProp } from '../core/types.ts';
 import type { TegakiBundle } from '../types.ts';
 
 /**

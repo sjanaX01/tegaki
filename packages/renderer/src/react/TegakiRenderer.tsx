@@ -11,7 +11,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { TegakiEngine, type TegakiEngineOptions } from '../core/engine.ts';
+import { TegakiEngine } from '../core/engine.ts';
+import type { TegakiEngineOptions } from '../core/types.ts';
 import type { Coercible } from '../lib/utils.ts';
 import { coerceToString } from '../lib/utils.ts';
 import type { TegakiEffects } from '../types.ts';
