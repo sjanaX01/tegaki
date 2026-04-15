@@ -80,8 +80,8 @@ Visit **[gkurt.com/tegaki](https://gkurt.com/tegaki)** for full documentation:
 
 - [Getting Started](https://gkurt.com/tegaki/getting-started/)
 - [Framework Guides](https://gkurt.com/tegaki/frameworks/react/) (React, Svelte, Vue, SolidJS, Astro, Web Components, Vanilla)
-- [Generating Fonts](https://gkurt.com/tegaki/guides/generating-fonts/)
-- [API Reference](https://gkurt.com/tegaki/api/tegaki-renderer/)
+- [Generating Fonts](https://gkurt.com/tegaki/guides/generating/)
+- [API Reference](https://gkurt.com/tegaki/api/renderer/)
 
 ## License
 
