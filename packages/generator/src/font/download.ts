@@ -8,7 +8,11 @@ function slugify(family: string): string {
 }
 
 function extractAllTtfUrls(css: string): string[] {
-  return [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.ttf)\)/g)]
+  // Google Fonts returns two URL shapes depending on whether `&text=` is set:
+  //   - full-subset files:  url(https://fonts.gstatic.com/s/.../font.ttf) format('truetype')
+  //   - subsetted kit URLs: url(https://fonts.gstatic.com/l/font?kit=...&v=v23) format('truetype')
+  // Both declare `format('truetype')`, so match on the format descriptor rather than a `.ttf` suffix.
+  return [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)\s*format\(['"]truetype['"]\)/g)]
     .map((m) => m[1])
     .filter((url): url is string => url !== undefined);
 }
