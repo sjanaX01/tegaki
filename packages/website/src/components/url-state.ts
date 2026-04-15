@@ -57,6 +57,12 @@ export interface UrlState {
   lineHeightRatio: number;
   showOverlay: boolean;
   timeMode: TimeMode;
+  /**
+   * Paused timeline position in seconds (controlled mode). When present and > 0 on load,
+   * the text preview starts paused at this time — useful for agents inspecting a specific
+   * frame by editing the URL.
+   */
+  currentTime: number;
   loop: boolean;
   catchUp: number;
   effectsState: EffectsState;
@@ -80,6 +86,7 @@ export const URL_DEFAULTS: UrlState = {
   lineHeightRatio: 1.5,
   showOverlay: false,
   timeMode: 'controlled',
+  currentTime: 0,
   loop: false,
   catchUp: 0,
   effectsState: DEFAULT_EFFECTS_STATE,
@@ -130,6 +137,10 @@ export function parseUrlState(): UrlState {
   if (p.has('lh')) state.lineHeightRatio = Number(p.get('lh'));
   if (p.has('ol')) state.showOverlay = p.get('ol') === '1';
   if (p.has('tm')) state.timeMode = p.get('tm') as TimeMode;
+  if (p.has('ct')) {
+    const v = Number(p.get('ct'));
+    if (Number.isFinite(v) && v >= 0) state.currentTime = v;
+  }
   if (p.has('lo')) state.loop = p.get('lo') === '1';
   if (p.has('cu')) state.catchUp = Number(p.get('cu'));
   if (p.has('fx')) {
@@ -177,6 +188,7 @@ export function buildUrlParams(state: UrlState): URLSearchParams {
   if (state.lineHeightRatio !== URL_DEFAULTS.lineHeightRatio) p.set('lh', String(state.lineHeightRatio));
   if (state.showOverlay !== URL_DEFAULTS.showOverlay) p.set('ol', '1');
   if (state.timeMode !== URL_DEFAULTS.timeMode) p.set('tm', state.timeMode);
+  if (state.currentTime !== URL_DEFAULTS.currentTime) p.set('ct', String(state.currentTime));
   if (state.loop !== URL_DEFAULTS.loop) p.set('lo', '1');
   if (state.catchUp !== URL_DEFAULTS.catchUp) p.set('cu', String(state.catchUp));
   if (JSON.stringify(state.effectsState) !== JSON.stringify(DEFAULT_EFFECTS_STATE)) {

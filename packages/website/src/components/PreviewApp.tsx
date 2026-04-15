@@ -152,6 +152,7 @@ export function PreviewApp() {
   const [lineHeightRatio, setLineHeightRatio] = useState(initialUrlState.lineHeightRatio);
   const [showOverlay, setShowOverlay] = useState(initialUrlState.showOverlay);
   const [timeMode, setTimeMode] = useState<TimeMode>(initialUrlState.timeMode);
+  const [currentTime, setCurrentTime] = useState(initialUrlState.currentTime);
   const [loop, setLoop] = useState(initialUrlState.loop);
   const [effectsState, setEffectsState] = useState<EffectsState>(initialUrlState.effectsState);
   const [customEffects, setCustomEffects] = useState<CustomEffect[]>(initialUrlState.customEffects);
@@ -316,6 +317,7 @@ export function PreviewApp() {
         lineHeightRatio,
         showOverlay,
         timeMode,
+        currentTime,
         loop,
         effectsState,
         customEffects,
@@ -339,6 +341,7 @@ export function PreviewApp() {
     lineHeightRatio,
     showOverlay,
     timeMode,
+    currentTime,
     loop,
     catchUp,
     effectsState,
@@ -875,6 +878,8 @@ export function PreviewApp() {
             onShowOverlayChange={setShowOverlay}
             timeMode={timeMode}
             onTimeModeChange={setTimeMode}
+            currentTime={currentTime}
+            onCurrentTimeChange={setCurrentTime}
             loop={loop}
             onLoopChange={setLoop}
             catchUp={catchUp}
@@ -1151,6 +1156,8 @@ function TextPreview({
   onShowOverlayChange,
   timeMode,
   onTimeModeChange: setTimeMode,
+  currentTime,
+  onCurrentTimeChange,
   loop,
   onLoopChange: setLoop,
   catchUp,
@@ -1183,6 +1190,8 @@ function TextPreview({
   onShowOverlayChange: (v: boolean) => void;
   timeMode: TimeMode;
   onTimeModeChange: (v: TimeMode) => void;
+  currentTime: number;
+  onCurrentTimeChange: (v: number) => void;
   loop: boolean;
   onLoopChange: (v: boolean) => void;
   catchUp: number;
@@ -1198,9 +1207,12 @@ function TextPreview({
   glyphEasing: string;
   onGlyphEasingChange: (v: string) => void;
 }) {
-  const [playing, setPlaying] = useState(true);
-  const [displayTime, setDisplayTime] = useState(0);
-  const timeRef = useRef(0);
+  // Initial time/paused state come from the URL (controlled mode only): a non-zero
+  // `ct` param loads the timeline paused at that position so agents can inspect a
+  // specific frame by editing the URL.
+  const [playing, setPlaying] = useState(() => currentTime === 0);
+  const [displayTime, setDisplayTime] = useState(() => currentTime);
+  const timeRef = useRef(currentTime);
   const [fontReady, setFontReady] = useState(false);
   const [showEffectsDrawer, setShowEffectsDrawer] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1265,13 +1277,18 @@ function TextPreview({
 
   // Synchronous font change detection — reset all font-dependent state BEFORE rendering
   // so TegakiRenderer never sees stale fontReady, displayTime, or glyph components.
+  // We skip the initial null→loaded transition so URL-seeded state (e.g. `ct`) survives
+  // the first font load; playback is only reset when the user actually switches fonts.
   const prevFontInfoForReset = useRef(fontInfo);
   if (prevFontInfoForReset.current !== fontInfo) {
+    const wasLoaded = prevFontInfoForReset.current !== null;
     prevFontInfoForReset.current = fontInfo;
     if (fontReady) setFontReady(false);
-    timeRef.current = 0;
-    if (displayTime !== 0) setDisplayTime(0);
-    if (!playing) setPlaying(true);
+    if (wasLoaded) {
+      timeRef.current = 0;
+      if (displayTime !== 0) setDisplayTime(0);
+      if (!playing) setPlaying(true);
+    }
   }
 
   // Register font face (stable — only changes when font changes, not on text edits)
@@ -1362,21 +1379,31 @@ function TextPreview({
 
   const prevTotalRef = useRef(timeline.totalDuration);
 
-  // Auto-resume when text extends timeline
+  // Auto-resume when text extends timeline. Guard against the initial 0→N transition
+  // (font loading) so a URL-seeded pause isn't silently resumed on mount.
   useEffect(() => {
-    if (timeline.totalDuration > prevTotalRef.current && timeRef.current >= prevTotalRef.current) {
+    if (prevTotalRef.current > 0 && timeline.totalDuration > prevTotalRef.current && timeRef.current >= prevTotalRef.current) {
       setPlaying(true);
     }
     prevTotalRef.current = timeline.totalDuration;
   }, [timeline.totalDuration]);
 
-  // Clamp time when text shortens
+  // Clamp time when text shortens. Skip while the timeline is empty (font not loaded yet)
+  // so URL-seeded `ct` isn't clamped to 0 before the real duration becomes known.
   useEffect(() => {
-    if (timeRef.current > timeline.totalDuration) {
+    if (timeline.totalDuration > 0 && timeRef.current > timeline.totalDuration) {
       timeRef.current = timeline.totalDuration;
       setDisplayTime(timeline.totalDuration);
     }
   }, [timeline.totalDuration]);
+
+  // Persist the paused timeline position to the URL (controlled mode). We only sync
+  // while paused — during playback the URL would update 60x/sec, which is both noisy
+  // and not useful (the URL represents a specific frame to resume from). This covers
+  // pause, seek (which forces `playing=false`), reset, and natural animation end.
+  useEffect(() => {
+    if (!playing) onCurrentTimeChange(displayTime);
+  }, [playing, displayTime, onCurrentTimeChange]);
 
   // rAF playback loop (controlled mode only)
   useEffect(() => {

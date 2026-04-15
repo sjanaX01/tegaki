@@ -6,7 +6,7 @@ Monorepo for generating and rendering handwriting animations from Google Fonts.
 
 - **Runtime**: Bun
 - **Language**: TypeScript (strict mode, ESNext, nodenext modules)
-- **CLI framework**: [Padrone](https://github.com/nicobrinkkemper/padrone) - schema-first CLI with Zod v4
+- **CLI framework**: [Padrone](https://github.com/KurtGokhan/padrone) - schema-first CLI with Zod v4
 - **Font parsing**: opentype.js
 - **Linter/Formatter**: Biome (2-space indent, single quotes, 140 line width)
 - **Testing**: Bun's built-in test runner
@@ -14,9 +14,9 @@ Monorepo for generating and rendering handwriting animations from Google Fonts.
 
 ## Packages
 
-- `packages/renderer` (`tegaki`) — Published npm package. React component for rendering animated handwriting.
-- `packages/generator` (`tegaki-generator`) — Internal CLI tool that generates glyph data from fonts. Not published; users generate font data via the website.
-- `packages/website` (`@tegaki/website`) — Website with interactive generator, preview app, and chat demo.
+- `packages/renderer` (`tegaki`) — Published npm package. Framework-agnostic animated handwriting renderer with adapters for React, Svelte, Vue, SolidJS, Astro, Web Components, vanilla JS, and Remotion. Ships pre-generated bundles for Caveat, Italianno, Tangerine, and Parisienne under `tegaki/fonts/*`.
+- `packages/generator` (`tegaki-generator`) — Internal CLI + library that generates glyph data from fonts. Not published; users generate font data via the website UI (which calls the same pipeline in-browser).
+- `packages/website` (`@tegaki/website`) — Astro + Starlight site containing the docs, framework examples, and the interactive generator/preview app at `/tegaki/generator/`.
 
 ## Commands
 
@@ -36,11 +36,38 @@ Use these commands instead of custom commands as much as possible. It's crucial 
 
 ### Renderer (`packages/renderer`)
 
-The `tegaki` npm package exports `TegakiRenderer` (a React component) and shared types (`Point`, `TimedPoint`, `BBox`, `Stroke`, `GlyphData`, `FontOutput`, `TegakiBundle`, etc.).
+The `tegaki` npm package is a framework-agnostic renderer with a shared core engine and thin per-framework adapters. Each adapter is exposed as a subpath export (`tegaki/react`, `tegaki/svelte`, `tegaki/vue`, `tegaki/solid`, `tegaki/astro`, `tegaki/wc`). The bare `tegaki` entry re-exports the React adapter for ergonomic backwards compatibility.
 
-- `src/index.ts` — Public API entry point
-- `src/lib/TegakiRenderer.tsx` — React component with text layout, animation timeline, and SVG time sync
-- `src/types.ts` — Shared types used across all packages
+```
+packages/renderer/src/
+  index.ts                    # Re-exports React adapter
+  types.ts                    # Shared types: Point, TimedPoint, BBox, Stroke, TegakiBundle, TegakiEffects, etc.
+  core/                       # Framework-agnostic engine
+    engine.ts                 # TegakiEngine — timeline, playback, time control, bundle loading
+    createBundle.ts           # Builds a TegakiBundle from parts
+    bundle-registry.ts        # Global bundle registry (register/lookup by family name)
+    render-elements.ts        # Low-level SVG element construction
+    types.ts                  # Engine-level types (TimeControlProp, effect config, etc.)
+  lib/                        # Shared helpers used by both core and adapters
+    timeline.ts               # computeTimeline() — per-grapheme animation schedule
+    textLayout.ts             # Line breaking, advance widths, RTL/LTR
+    drawGlyph.ts              # Glyph -> SVG path drawing
+    drawFallbackGlyph.ts      # Fallback when glyph missing from bundle
+    effects.ts                # Glow, wobble, pressureWidth, taper, gradient
+    strokeCache.ts            # Memoized stroke subdivision (CSS-pixel aware)
+    css-properties.ts         # CSS custom property plumbing for animation state
+    font.ts                   # FontFace registration helpers
+    utils.ts
+  react/TegakiRenderer.tsx    # React adapter
+  svelte/                     # Svelte 5 adapter
+  vue/                        # Vue 3 adapter
+  solid/                      # SolidJS adapter
+  astro/TegakiRenderer.astro  # Astro adapter (SSR-capable)
+  wc/                         # Web Component adapter (`<tegaki-renderer>`)
+  remotion/                   # Remotion-specific helpers
+```
+
+Pre-generated font bundles live outside `src/`, under `packages/renderer/fonts/<family>/` and are regenerated via `bun --filter tegaki generate-fonts`.
 
 ### Generator (`packages/generator`)
 
@@ -55,7 +82,7 @@ Font download -> Parse (opentype.js) -> Flatten beziers -> Rasterize -> Skeleton
 1. **Extract** (`src/font/parse.ts`): opentype.js extracts path commands and metrics
 2. **Flatten** (`src/processing/bezier.ts`): Adaptive de Casteljau subdivision converts bezier curves to polyline segments
 3. **Rasterize** (`src/processing/rasterize.ts`): Scanline fill with nonzero winding rule produces a binary bitmap
-4. **Skeletonize** (`src/processing/skeletonize.ts`): Zhang-Suen thinning reduces the bitmap to 1px-wide skeleton
+4. **Skeletonize** (`src/processing/skeletonize.ts`): Reduces the bitmap to a 1px-wide skeleton. Default is Zhang-Suen thinning; the pipeline also supports Guo-Hall, Lee 3D, morphological thin, medial-axis (distance transform ridge), Voronoi-based medial axis (`voronoi-medial-axis.ts`), and scikit-image variants via an out-of-process Python bridge (`skimage-bridge.ts` + `skimage_bridge.py`; CLI-only).
 5. **Trace** (`src/processing/trace.ts`): Walks skeleton pixels into polylines, prunes short spurs, simplifies with Ramer-Douglas-Peucker
 6. **Width** (`src/processing/width.ts`): Distance transform computes stroke width (diameter) at each skeleton point
 7. **Stroke order** (`src/processing/stroke-order.ts`): Groups polylines into connected components, sorts top-to-bottom/left-to-right, orients strokes, assigns `t` parameter (0-1 animation progress)
@@ -64,26 +91,28 @@ Font download -> Parse (opentype.js) -> Flatten beziers -> Rasterize -> Skeleton
 
 ```
 packages/generator/src/
-  index.ts                    # Public API exports
+  index.ts                    # Public API exports (used by the website's in-browser pipeline)
   constants.ts                # Defaults: resolution (400), chars, font family (Caveat), tolerances
   cli/
     index.ts                  # CLI entry point (Padrone)
     index.test.ts             # Tests
   commands/
-    generate.ts               # Generate command: orchestrates full pipeline
+    generate.ts               # Generate command: orchestrates the full pipeline and writes the bundle
   font/
     download.ts               # Google Fonts download + local .ttf caching
     parse.ts                  # opentype.js wrapper
   processing/
-    bezier.ts                 # Bezier curve flattening (adaptive subdivision)
+    bezier.ts                 # Bezier curve flattening (adaptive de Casteljau subdivision)
     rasterize.ts              # Scanline fill rasterizer (nonzero winding rule)
-    skeletonize.ts            # Zhang-Suen thinning algorithm
+    skeletonize.ts            # Zhang-Suen, Guo-Hall, Lee, morphological thin, medial axis
+    voronoi-medial-axis.ts    # Voronoi-based medial axis alternative
+    skimage-bridge.ts         # Node-side IPC to the scikit-image subprocess (CLI-only)
+    skimage_bridge.py         # Python worker — scikit-image skeleton variants
     trace.ts                  # Skeleton pixel tracing + RDP simplification + spur pruning
     width.ts                  # Distance transform for stroke width
     stroke-order.ts           # Connected component grouping + heuristic ordering
     animated-svg.ts           # Convert strokes to animated SVG + TSX
     visualize.ts              # Debug visualization (bitmap, skeleton, traces)
-    voronoi-medial-axis.ts    # Voronoi-based skeletonization alternative
     png.ts                    # PNG encoding
   debug/
     output.ts                 # Write debug visualization files
@@ -91,21 +120,70 @@ packages/generator/src/
 
 ### Website (`packages/website`)
 
-Preview app for interactive glyph inspection and a chat demo with streaming animation.
+Astro 6 site built on Starlight (theme: Nova) serving the public docs at the root and the interactive generator at `/tegaki/generator/`. Starlight handles the sidebar/content docs under `src/content/docs/`; the generator page is a standalone Astro page mounting the React `PreviewApp`.
 
 ```
-packages/website/src/
-  server.ts                   # Bun web server
-  frontend/
-    preview-main.tsx          # Entry point for preview
-    preview.html              # HTML shell for preview
-    PreviewApp.tsx            # Glyph inspector + text preview
-    ChatScreenDemo.tsx        # Chat demo with streaming animation
-    chat.html                 # HTML shell for chat
-    font.ts                   # Pre-generated font bundle import
-    url-state.ts              # URL state persistence
-    style.css                 # Tailwind styles
+packages/website/
+  astro.config.ts             # Astro config — `base: '/tegaki'`, integrations (React, Svelte, Vue, Solid, Starlight), vite aliases (`tegaki@dev`)
+  public/                     # Static assets served as-is (favicon, OG card, robots.txt)
+  src/
+    pages/generator.astro     # Mounts <PreviewApp client:only="react" />
+    components/
+      PreviewApp.tsx          # The generator UI: glyph inspector + text preview, all state persisted to URL
+      url-state.ts            # URL <-> state serialization (short keys, only non-defaults written)
+      LiveDemo.tsx            # Embeddable React demo used in docs
+      HomePageExamples.tsx
+      HomePageExamplesLoader.tsx
+      StaticChatDemo.tsx
+      astro/ solid/ svelte/ vanilla/ vue/ wc/   # Per-framework example components referenced from docs
+    content/
+      docs/                   # Starlight MDX/Markdown content
+    content.config.ts         # Starlight content collections config
+    assets/                   # Logo, images
+    styles/global.css         # Tailwind v4 styles (imported via `@tailwindcss/vite`)
 ```
+
+Dev server: `bun dev` → Astro at `http://localhost:4321/tegaki/` (generator at `/tegaki/generator/`; `/tegaki/preview` redirects to `/tegaki/generator`).
+
+#### Testing the preview app via URL state
+
+`PreviewApp` persists nearly all of its state to the URL through short keys (see [packages/website/src/components/url-state.ts](packages/website/src/components/url-state.ts)). This is the primary way for an agent to drive the UI reproducibly — navigate to a URL, inspect the rendered output, change a param, repeat. Only values that differ from defaults are serialized, so unset params are equivalent to defaults.
+
+Common keys (non-exhaustive — `url-state.ts` is the source of truth):
+
+| Key  | Meaning                                                        | Example              |
+|------|----------------------------------------------------------------|----------------------|
+| `f`  | Font family (Google Fonts name)                                | `f=Caveat`           |
+| `ch` | Character set being processed                                  | `ch=Abc`             |
+| `g`  | Selected glyph (glyph mode)                                    | `g=A`                |
+| `s`  | Active pipeline stage (`outline`/`skeleton`/`final`/...)       | `s=skeleton`         |
+| `m`  | Preview mode: `glyph` or `text`                                | `m=text`             |
+| `t`  | Preview text                                                   | `t=Hello`            |
+| `tm` | Time mode: `controlled` / `uncontrolled` / `css`               | `tm=controlled`      |
+| `ct` | **Paused timeline position in seconds (controlled mode).** When present and > 0, the text preview loads **paused** at that time. Auto-updated on pause/seek/reset, left stale during playback. | `ct=1.25` |
+| `as` | Animation speed multiplier                                     | `as=2`               |
+| `fs` | Font size in px                                                | `fs=96`              |
+| `lh` | Line height ratio                                              | `lh=1.5`             |
+| `ol` | Show debug overlay (0/1)                                       | `ol=1`               |
+| `fx` | Effects state as JSON                                          | `fx=%7B...%7D`       |
+| `se` / `ge` | Stroke / glyph easing preset                            | `se=ease-out-cubic`  |
+| `pr` / `ss` | Render quality — pixel ratio / stroke segment size      | `pr=2&ss=1`          |
+
+Pipeline options are also URL-addressable (`res`, `sk`, `bt`, `rt`, ... — see `OPTION_KEYS` in url-state.ts).
+
+**Typical workflow for an agent inspecting a frame:**
+
+1. Start the dev server (`bun dev`) if it isn't already running.
+2. Navigate to a URL encoding the desired state, e.g.
+   `http://localhost:4321/tegaki/generator/?m=text&t=Hello&tm=controlled&ct=1.25&fs=96`
+3. Take a screenshot / snapshot via whatever browser tooling is available (e.g. the `chrome-devtools` MCP — `new_page`, `navigate_page`, `take_screenshot`). The timeline will be **paused at `ct`**, so screenshots are deterministic.
+4. To sweep frames, vary `ct` and re-navigate; the page does not hot-swap URL state, so a reload / re-navigation is required.
+5. To capture the final frame, pass a `ct` value greater than the timeline duration — it clamps to the end and stays paused.
+
+Caveats:
+- `ct` only applies in `tm=controlled`. In `uncontrolled` (engine-driven rAF) or `css` (scroll-timeline) modes the animation is not seekable by time; the param is ignored.
+- When the agent changes the URL via `window.history.pushState` etc., state is *not* reparsed — `parseUrlState()` runs once on mount. Always use a full navigation/reload.
+- `ct` is written when paused and stays stale during playback — copying a URL mid-playback will not capture the live time.
 
 ### Key Design Decisions
 
@@ -116,32 +194,40 @@ packages/website/src/
 
 ### Output Format
 
-The `generate` command outputs a JSON file with this structure:
+The `generate` command writes a bundle directory containing three files:
+
+```
+<output>/
+  <family>.ttf        # The raw font file, co-located so the bundle is self-contained
+  glyphData.json      # Compact per-glyph stroke data (keys shortened for payload size)
+  bundle.ts           # Auto-generated module: imports the font + JSON and exports a TegakiBundle
+```
+
+`glyphData.json` uses compact keys (decoded by the renderer as `TegakiGlyphData` — see [packages/renderer/src/types.ts](packages/renderer/src/types.ts)):
 
 ```json
 {
-  "font": { "family": "Caveat", "style": "Regular", "unitsPerEm": 1000, "ascender": 960, "descender": -300 },
-  "glyphs": {
-    "A": {
-      "char": "A",
-      "unicode": 65,
-      "advanceWidth": 502,
-      "boundingBox": { "x1": ..., "y1": ..., "x2": ..., "y2": ... },
-      "path": "<SVG path string>",
-      "skeleton": [[{"x": ..., "y": ...}, ...], ...],
-      "strokes": [
-        { "points": [{"x": ..., "y": ..., "t": 0, "width": 45.2}, ...], "order": 0 }
-      ]
-    }
+  "A": {
+    "w": 502,
+    "t": 1.24,
+    "s": [
+      { "p": [[x, y, width], [x, y, width], ...], "d": 0, "a": 0.62 }
+    ]
   }
 }
 ```
 
-Each stroke point has: `x`, `y` (font units), `t` (0-1 animation progress along stroke), `width` (stroke diameter in font units).
+- `w` — advance width (font units)
+- `t` — total animation duration (seconds)
+- `s` — strokes, each with:
+  - `p` — points as `[x, y, width]` tuples (font units for coords, font units for stroke diameter)
+  - `d` — delay before the stroke begins (seconds)
+  - `a` — animation duration of the stroke (seconds)
+
+The verbose in-memory shape (`FontOutput`/`GlyphData` with `boundingBox`, `path`, full `skeleton`, per-point `t`, etc.) is defined in `packages/renderer/src/types.ts` and is produced internally by the pipeline — only the compact projection above is persisted.
 
 ## Conventions
 
-- Padrone command builders use `AnyPadroneBuilder` type (not `PadroneCommandBuilder` which doesn't exist)
 - Biome auto-formats on commit via husky + lint-staged
 - Imports use `.ts` extensions for local imports (`import { foo } from './bar.ts'`), package imports use bare specifiers (`import { foo } from 'tegaki'`)
 - Zod is imported as `import * as z from 'zod/v4'` (not default import)
