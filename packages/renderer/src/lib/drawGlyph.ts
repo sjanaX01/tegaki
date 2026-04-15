@@ -278,10 +278,14 @@ export function drawGlyph(
     const coarseSegments = segments.slice();
 
     // --- Subdivide long segments for smooth effect transitions ---
+    // `segmentSize` is in CSS pixels, so subdivision count scales with rendered
+    // size: a 100px stroke with segmentSize=1 yields ~100 sub-segments; the same
+    // stroke rendered at 10px yields ~10. This avoids massive over-subdivision
+    // at small font sizes.
     const effectsNeedSubdivision = pressureAmount > 0 || hasGradient || !!wobbleEffect || !!taperEffect;
     const resolvedSegmentSize = segmentSize ?? (effectsNeedSubdivision ? 2 : undefined);
     if (resolvedSegmentSize != null) {
-      const maxSegLen = resolvedSegmentSize * scale;
+      const maxSegLen = resolvedSegmentSize;
       const subdivided: typeof segments = [];
       for (const seg of segments) {
         const dx = seg.x1 - seg.x0;

@@ -96,10 +96,13 @@ export interface TegakiQuality {
    */
   pixelRatio?: number;
   /**
-   * Maximum drawn segment length (in font units) when stroke-varying effects
+   * Maximum drawn segment length in CSS pixels when stroke-varying effects
    * (`pressureWidth`, `taper`, `wobble`, `gradient`) are active. Smaller values
    * produce smoother transitions at the cost of more draw calls per stroke.
-   * Defaults to `2` when such effects are on, otherwise segments are not subdivided.
+   * Because this is measured in pixels, subdivision count scales with rendered
+   * size: a glyph drawn at 10px is cheaper to render than the same glyph at
+   * 100px. Defaults to `2` when such effects are on, otherwise segments are not
+   * subdivided.
    */
   segmentSize?: number;
 }
