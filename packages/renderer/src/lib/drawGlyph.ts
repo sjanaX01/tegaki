@@ -1,6 +1,9 @@
 import type { LineCap, TegakiGlyphData } from '../types.ts';
 import { findEffect, findEffects, type ResolvedEffect } from './effects.ts';
+import { type SubdividedStroke, subdivideStroke } from './strokeCache.ts';
 import { resolveCSSLength } from './utils.ts';
+
+type Stroke = TegakiGlyphData['s'][number];
 
 interface GlyphPosition {
   /** X offset in CSS pixels */
@@ -82,6 +85,11 @@ function defaultStrokeEasing(t: number): number {
 /**
  * Draw a single glyph's strokes onto a canvas context, animated up to `localTime`.
  * `localTime` is seconds relative to this glyph's start (0 = glyph begins).
+ *
+ * `getSubdivided` returns a shared, cached subdivision of each stroke (in font
+ * units, pre-wobble). The engine owns the cache and invalidates it when the
+ * font, fontSize, or segment size changes; if omitted here, strokes are
+ * subdivided inline each call (useful for testing).
  */
 export function drawGlyph(
   ctx: CanvasRenderingContext2D,
@@ -92,7 +100,7 @@ export function drawGlyph(
   color: string,
   effects: ResolvedEffect[] = [],
   seed = 0,
-  segmentSize?: number,
+  getSubdivided?: (stroke: Stroke) => SubdividedStroke,
   strokeEasing: ((t: number) => number) | undefined = defaultStrokeEasing,
 ) {
   const scale = pos.fontSize / pos.unitsPerEm;
@@ -112,6 +120,7 @@ export function drawGlyph(
   const wobbleAmplitude = wobbleEffect ? (wobbleEffect.config.amplitude ?? 1.5) : 0;
   const wobbleFrequency = wobbleEffect ? (wobbleEffect.config.frequency ?? 8) : 0;
   const wobbleMode = wobbleEffect?.config.mode ?? 'sine';
+  const hasWobble = !!wobbleEffect;
 
   // Taper params
   const taperStart = taperEffect ? Math.max(0, Math.min(taperEffect.config.startLength ?? 0.15, 1)) : 0;
@@ -123,21 +132,30 @@ export function drawGlyph(
   const gradientColorStops = Array.isArray(gradientColors) ? gradientColors : undefined;
   const gradientSaturation = gradientEffect?.config.saturation ?? 80;
   const gradientLightness = gradientEffect?.config.lightness ?? 55;
+  const hasGradient = !!gradientEffect;
 
-  // Helper: apply wobble offset to a point in font units
-  const wobbleX = (x: number, y: number, idx: number) => {
-    if (!wobbleEffect) return x;
-    if (wobbleMode === 'noise') {
-      return x + wobbleAmplitude * (noise1d(y * 0.1 + idx * 0.7, seed) * 2 - 1);
-    }
-    return x + wobbleAmplitude * Math.sin(wobbleFrequency * (y * 0.01 + idx * 0.7) + seed);
+  // Effects that vary per-segment require splitting the polyline into
+  // individual stroke() calls. Gradient also varies per-segment but via
+  // strokeStyle, not lineWidth.
+  const needsPerSegment = pressureAmount > 0 || !!taperEffect;
+
+  // Fallback subdivider for callers that don't thread the engine's cache
+  // (tests, standalone use). Engine always provides a cached version.
+  const subdivide = getSubdivided ?? ((s: Stroke) => subdivideStroke(s, Infinity));
+
+  // Wobble offsets (in font units). Evaluated once per rendered sub-vertex;
+  // fractional `idx` keeps the wobble phase continuous across sub-segments.
+  // dx depends on y; dy depends on x — the asymmetry keeps the perpendicular
+  // wobble component out of phase with the along-stroke one.
+  const wobbleDx = (_x: number, y: number, idx: number): number => {
+    if (!hasWobble) return 0;
+    if (wobbleMode === 'noise') return wobbleAmplitude * (noise1d(y * 0.1 + idx * 0.7, seed) * 2 - 1);
+    return wobbleAmplitude * Math.sin(wobbleFrequency * (y * 0.01 + idx * 0.7) + seed);
   };
-  const wobbleY = (x: number, y: number, idx: number) => {
-    if (!wobbleEffect) return y;
-    if (wobbleMode === 'noise') {
-      return y + wobbleAmplitude * (noise1d(x * 0.1 + idx * 0.5, seed * 1.3 + 1000) * 2 - 1);
-    }
-    return y + wobbleAmplitude * Math.cos(wobbleFrequency * (x * 0.01 + idx * 0.5) + seed * 1.3);
+  const wobbleDy = (x: number, _y: number, idx: number): number => {
+    if (!hasWobble) return 0;
+    if (wobbleMode === 'noise') return wobbleAmplitude * (noise1d(x * 0.1 + idx * 0.5, seed * 1.3 + 1000) * 2 - 1);
+    return wobbleAmplitude * Math.cos(wobbleFrequency * (x * 0.01 + idx * 0.5) + seed * 1.3);
   };
 
   // Helper: convert font-unit point to pixel
@@ -150,7 +168,6 @@ export function drawGlyph(
     if (gradientColorStops) return gradientColor(progress, gradientColorStops, seed);
     return color;
   };
-  const hasGradient = !!gradientEffect;
 
   // Helper: taper multiplier (0-1) for a given stroke progress
   const taperMultiplier = (progress: number): number => {
@@ -166,19 +183,17 @@ export function drawGlyph(
     const linearProgress = Math.min(elapsed / stroke.a, 1);
     const progress = strokeEasing ? strokeEasing(linearProgress) : linearProgress;
 
-    const pts = stroke.p;
-    if (pts.length === 0) continue;
+    const rawPts = stroke.p;
+    if (rawPts.length === 0) continue;
 
-    const avgWidth = pts.reduce((s, p) => s + p[2], 0) / pts.length;
-    const baseLineWidth = Math.max(avgWidth, 0.5) * scale;
-
-    // --- Single-point dot ---
-    if (pts.length === 1) {
+    // --- Single-point dot (bypass cache; there is nothing to subdivide) ---
+    if (rawPts.length === 1) {
       if (progress <= 0) continue;
-      const p = pts[0]!;
-      const dotX = px(wobbleX(p[0], p[1], 0));
-      const dotY = py(wobbleY(p[0], p[1], 0));
-      const perPointDot = Math.max(p[2], 0.5) * scale;
+      const p = rawPts[0]!;
+      const dotX = px(p[0]! + wobbleDx(p[0]!, p[1]!, 0));
+      const dotY = py(p[1]! + wobbleDy(p[0]!, p[1]!, 0));
+      const baseLineWidth = Math.max(p[2]!, 0.5) * scale;
+      const perPointDot = Math.max(p[2]!, 0.5) * scale;
       let dotWidth = baseLineWidth + (perPointDot - baseLineWidth) * pressureAmount;
       dotWidth *= taperMultiplier(0.5);
 
@@ -212,151 +227,77 @@ export function drawGlyph(
       continue;
     }
 
-    // --- Compute total path length ---
-    let totalLen = 0;
-    for (let j = 1; j < pts.length; j++) {
-      const dx = pts[j]![0] - pts[j - 1]![0];
-      const dy = pts[j]![1] - pts[j - 1]![1];
-      totalLen += Math.sqrt(dx * dx + dy * dy);
-    }
+    // --- Multi-point stroke: consume cached subdivision ---
+    const cached = subdivide(stroke);
+    const { vertices, totalLen, avgWidth } = cached;
+    if (vertices.length < 2 || totalLen <= 0) continue;
 
     const drawLen = totalLen * progress;
     if (drawLen <= 0) continue;
 
-    // --- Collect drawable segments ---
-    const segments: {
-      x0: number;
-      y0: number;
-      x1: number;
-      y1: number;
-      width0: number;
-      width1: number;
-      segProgress: number;
-    }[] = [];
+    const baseLineWidth = Math.max(avgWidth, 0.5) * scale;
 
-    let accumulated = 0;
-    for (let j = 1; j < pts.length; j++) {
-      const prev = pts[j - 1]!;
-      const cur = pts[j]!;
-      const dx = cur[0] - prev[0];
-      const dy = cur[1] - prev[1];
-      const segLen = Math.sqrt(dx * dx + dy * dy);
+    // Binary search for the last fully-included vertex — i.e. the largest i
+    // with vertices[i].cumLen <= drawLen.
+    let lo = 0;
+    let hi = vertices.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (vertices[mid]!.cumLen <= drawLen) lo = mid;
+      else hi = mid - 1;
+    }
+    const lastIdx = lo;
 
-      if (accumulated + segLen <= drawLen) {
-        segments.push({
-          x0: px(wobbleX(prev[0], prev[1], j - 1)),
-          y0: py(wobbleY(prev[0], prev[1], j - 1)),
-          x1: px(wobbleX(cur[0], cur[1], j)),
-          y1: py(wobbleY(cur[0], cur[1], j)),
-          width0: prev[2],
-          width1: cur[2],
-          segProgress: (accumulated + segLen / 2) / totalLen,
-        });
-        accumulated += segLen;
-      } else {
-        const remaining = drawLen - accumulated;
-        const frac = segLen > 0 ? remaining / segLen : 0;
-        const ix = prev[0] + dx * frac;
-        const iy = prev[1] + dy * frac;
-        const iw = prev[2] + (cur[2] - prev[2]) * frac;
-        segments.push({
-          x0: px(wobbleX(prev[0], prev[1], j - 1)),
-          y0: py(wobbleY(prev[0], prev[1], j - 1)),
-          x1: px(wobbleX(ix, iy, j)),
-          y1: py(wobbleY(ix, iy, j)),
-          width0: prev[2],
-          width1: iw,
-          segProgress: (accumulated + remaining / 2) / totalLen,
-        });
-        break;
-      }
+    // Interpolate the tail of the last, partially-drawn sub-segment.
+    let tailX = 0;
+    let tailY = 0;
+    let tailWidth = 0;
+    let tailIdx = 0;
+    let tailCumLen = 0;
+    let hasTail = false;
+    if (lastIdx + 1 < vertices.length && drawLen > vertices[lastIdx]!.cumLen) {
+      const a = vertices[lastIdx]!;
+      const b = vertices[lastIdx + 1]!;
+      const segLen = b.cumLen - a.cumLen;
+      const t = segLen > 0 ? (drawLen - a.cumLen) / segLen : 0;
+      tailX = a.x + (b.x - a.x) * t;
+      tailY = a.y + (b.y - a.y) * t;
+      tailWidth = a.width + (b.width - a.width) * t;
+      tailIdx = a.idx + (b.idx - a.idx) * t;
+      tailCumLen = drawLen;
+      hasTail = true;
     }
 
-    if (segments.length === 0) continue;
-
-    // Keep coarse segments for glow (shadowBlur is expensive per draw call)
-    const coarseSegments = segments.slice();
-
-    // --- Subdivide long segments for smooth effect transitions ---
-    // `segmentSize` is in CSS pixels, so subdivision count scales with rendered
-    // size: a 100px stroke with segmentSize=1 yields ~100 sub-segments; the same
-    // stroke rendered at 10px yields ~10. This avoids massive over-subdivision
-    // at small font sizes.
-    const effectsNeedSubdivision = pressureAmount > 0 || hasGradient || !!wobbleEffect || !!taperEffect;
-    const resolvedSegmentSize = segmentSize ?? (effectsNeedSubdivision ? 2 : undefined);
-    if (resolvedSegmentSize != null) {
-      const maxSegLen = resolvedSegmentSize;
-      const subdivided: typeof segments = [];
-      for (const seg of segments) {
-        const dx = seg.x1 - seg.x0;
-        const dy = seg.y1 - seg.y0;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const count = Math.max(1, Math.ceil(len / maxSegLen));
-        for (let k = 0; k < count; k++) {
-          const t0 = k / count;
-          const t1 = (k + 1) / count;
-          subdivided.push({
-            x0: seg.x0 + dx * t0,
-            y0: seg.y0 + dy * t0,
-            x1: seg.x0 + dx * t1,
-            y1: seg.y0 + dy * t1,
-            width0: seg.width0 + (seg.width1 - seg.width0) * t0,
-            width1: seg.width0 + (seg.width1 - seg.width0) * t1,
-            segProgress: seg.segProgress,
-          });
-        }
-      }
-      for (let k = 0; k < subdivided.length; k++) {
-        subdivided[k]!.segProgress = subdivided.length > 1 ? k / (subdivided.length - 1) : 0;
-      }
-      segments.length = 0;
-      segments.push(...subdivided);
+    // Pre-transform every visible vertex (raw + wobble + scale + translate)
+    // exactly once — glow and main passes both iterate this array, and the
+    // per-segment case needs stable endpoints across its N stroke() calls.
+    const tcount = lastIdx + 1 + (hasTail ? 1 : 0);
+    const txs: number[] = new Array(tcount);
+    const tys: number[] = new Array(tcount);
+    for (let i = 0; i <= lastIdx; i++) {
+      const v = vertices[i]!;
+      txs[i] = px(v.x + wobbleDx(v.x, v.y, v.idx));
+      tys[i] = py(v.y + wobbleDy(v.x, v.y, v.idx));
     }
-
-    // Helper: compute segment line width with pressure and taper
-    const segWidth = (seg: (typeof segments)[0]) => {
-      const perPoint = ((seg.width0 + seg.width1) / 2) * scale;
-      const w = Math.max(baseLineWidth + (perPoint - baseLineWidth) * pressureAmount, 0.5 * scale);
-      return w * taperMultiplier(seg.segProgress);
-    };
-
-    const needsPerSegment = pressureAmount > 0 || taperEffect;
-
-    const drawStrokePath = () => {
-      if (needsPerSegment) {
-        for (const seg of segments) {
-          ctx.lineWidth = segWidth(seg);
-          ctx.beginPath();
-          ctx.moveTo(seg.x0, seg.y0);
-          ctx.lineTo(seg.x1, seg.y1);
-          ctx.stroke();
-        }
-      } else {
-        ctx.lineWidth = baseLineWidth;
-        ctx.beginPath();
-        ctx.moveTo(segments[0]!.x0, segments[0]!.y0);
-        for (const seg of segments) {
-          ctx.lineTo(seg.x1, seg.y1);
-        }
-        ctx.stroke();
-      }
-    };
-
-    const drawGradientPath = () => {
-      for (const seg of segments) {
-        ctx.strokeStyle = colorAt(seg.segProgress);
-        if (needsPerSegment) ctx.lineWidth = segWidth(seg);
-        ctx.beginPath();
-        ctx.moveTo(seg.x0, seg.y0);
-        ctx.lineTo(seg.x1, seg.y1);
-        ctx.stroke();
-      }
-    };
+    if (hasTail) {
+      txs[tcount - 1] = px(tailX + wobbleDx(tailX, tailY, tailIdx));
+      tys[tcount - 1] = py(tailY + wobbleDy(tailX, tailY, tailIdx));
+    }
 
     ctx.lineCap = lineCap;
     ctx.lineJoin = 'round';
 
-    // --- Glow passes (use coarse segments to avoid expensive per-subsegment shadowBlur) ---
+    // Trace the full visible polyline as one Path2D primitive. Used for both
+    // glow (where it's critical — shadowBlur cost is per stroke() call, so
+    // coalescing into one call matters) and the no-per-segment-effect main
+    // draw.
+    const tracePolyline = () => {
+      ctx.beginPath();
+      ctx.moveTo(txs[0]!, tys[0]!);
+      for (let i = 1; i < tcount; i++) ctx.lineTo(txs[i]!, tys[i]!);
+    };
+
+    // --- Glow passes (one stroke() call per glow over the full polyline) ---
     for (const glow of glowEffects) {
       ctx.save();
       ctx.shadowBlur = resolveCSSLength(glow.config.radius ?? 8, pos.fontSize);
@@ -365,21 +306,43 @@ export function drawGlyph(
       ctx.shadowOffsetY = (glow.config.offsetY ?? 0) * scale;
       ctx.strokeStyle = glow.config.color ?? color;
       ctx.lineWidth = baseLineWidth;
-      ctx.beginPath();
-      ctx.moveTo(coarseSegments[0]!.x0, coarseSegments[0]!.y0);
-      for (const seg of coarseSegments) {
-        ctx.lineTo(seg.x1, seg.y1);
-      }
+      tracePolyline();
       ctx.stroke();
       ctx.restore();
     }
 
     // --- Main stroke ---
-    if (hasGradient) {
-      drawGradientPath();
-    } else {
+    if (!needsPerSegment && !hasGradient) {
+      // Fast path: single stroke() over the whole truncated polyline.
       ctx.strokeStyle = color;
-      drawStrokePath();
+      ctx.lineWidth = baseLineWidth;
+      tracePolyline();
+      ctx.stroke();
+    } else {
+      // Per-segment path: each sub-segment is its own mini-stroke so
+      // lineWidth / strokeStyle can vary. Adjacent round-capped endpoints
+      // overlap to read as a continuous line.
+      const invTotalLen = 1 / totalLen;
+      for (let i = 1; i < tcount; i++) {
+        const aCum = i - 1 <= lastIdx ? vertices[i - 1]!.cumLen : tailCumLen;
+        const bCum = i <= lastIdx ? vertices[i]!.cumLen : tailCumLen;
+        const aWidth = i - 1 <= lastIdx ? vertices[i - 1]!.width : tailWidth;
+        const bWidth = i <= lastIdx ? vertices[i]!.width : tailWidth;
+        const midProgress = (aCum + bCum) * 0.5 * invTotalLen;
+
+        let lw = baseLineWidth;
+        if (needsPerSegment) {
+          const perPoint = (aWidth + bWidth) * 0.5 * scale;
+          const w = Math.max(baseLineWidth + (perPoint - baseLineWidth) * pressureAmount, 0.5 * scale);
+          lw = w * taperMultiplier(midProgress);
+        }
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = hasGradient ? colorAt(midProgress) : color;
+        ctx.beginPath();
+        ctx.moveTo(txs[i - 1]!, tys[i - 1]!);
+        ctx.lineTo(txs[i]!, tys[i]!);
+        ctx.stroke();
+      }
     }
   }
 }

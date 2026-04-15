@@ -9,14 +9,15 @@ import {
 } from '../lib/css-properties.ts';
 import { drawFallbackGlyph } from '../lib/drawFallbackGlyph.ts';
 import { drawGlyph } from '../lib/drawGlyph.ts';
-import { type ResolvedEffect, resolveEffects } from '../lib/effects.ts';
+import { findEffect, type ResolvedEffect, resolveEffects } from '../lib/effects.ts';
 import { ensureFont } from '../lib/font.ts';
+import { type SubdividedStroke, subdivideStroke } from '../lib/strokeCache.ts';
 import type { TextLayout } from '../lib/textLayout.ts';
 import { computeTextLayout } from '../lib/textLayout.ts';
 import type { Timeline, TimelineConfig, TimelineEntry } from '../lib/timeline.ts';
 import { computeTimeline } from '../lib/timeline.ts';
 import { graphemes } from '../lib/utils.ts';
-import type { TegakiBundle } from '../types.ts';
+import type { TegakiBundle, TegakiGlyphData } from '../types.ts';
 import { getBundle, registerBundle as registryRegisterBundle, resolveBundle } from './bundle-registry.ts';
 import { buildChildren, buildRootProps, domCreateElement } from './render-elements.ts';
 import type { CreateElementFn, TegakiEngineOptions, TegakiQuality, TimeControlMode, TimeControlProp } from './types.ts';
@@ -75,6 +76,13 @@ export class TegakiEngine {
   private _layout: TextLayout | null = null;
   private _layoutKey = '';
   private _fontReady = false;
+
+  // Stroke subdivision cache. Shared across every instance of the same glyph
+  // at the current (font, fontSize, segmentSize, effects-need-subdivision)
+  // state. Replaced wholesale when that state changes — entries in the old
+  // WeakMap are orphaned and GC'd along with the map.
+  private _strokeCache: WeakMap<TegakiGlyphData['s'][number], SubdividedStroke> = new WeakMap();
+  private _strokeCacheKey = '';
 
   // --- Measured from DOM ---
   private _containerWidth = 0;
@@ -356,6 +364,10 @@ export class TegakiEngine {
     this._mql?.removeEventListener('change', this._onReducedMotionChange);
     // Only remove content we created (non-adopt mode). The container is owned by the caller.
     this._contentEl?.remove();
+    // Drop the subdivision cache so the font's strokes aren't kept keyed
+    // against this (dead) engine if a caller holds a stale reference.
+    this._strokeCache = new WeakMap();
+    this._strokeCacheKey = '';
   }
 
   // =========================================================================
@@ -748,6 +760,39 @@ export class TegakiEngine {
     const characters = graphemes(this._text);
     const currentTime = this.currentTime;
 
+    // --- Subdivision cache setup ---
+    // `maxSegLenFU` is the subdivision threshold in font units. It collapses
+    // every input that matters (segmentSize in CSS px, fontSize, unitsPerEm,
+    // whether any effect needs subdivision) into a single value, so the cache
+    // key is just (font family, maxSegLenFU). When anything that affects
+    // subdivision changes, the key changes and the WeakMap is swapped out.
+    const effectsNeedSubdivision =
+      !!findEffect(this._resolvedEffects, 'wobble') ||
+      !!findEffect(this._resolvedEffects, 'gradient') ||
+      !!findEffect(this._resolvedEffects, 'taper') ||
+      (() => {
+        const p = findEffect(this._resolvedEffects, 'pressureWidth');
+        return !!p && Math.max(0, Math.min(p.config.strength ?? 1, 1)) > 0;
+      })();
+    const userSegmentSize = this._quality?.segmentSize;
+    const resolvedSegmentSize = userSegmentSize ?? (effectsNeedSubdivision ? 2 : undefined);
+    const scale = fontSize / font.unitsPerEm;
+    const maxSegLenFU = resolvedSegmentSize != null ? resolvedSegmentSize / scale : Infinity;
+    const cacheKey = `${font.family}|${maxSegLenFU}`;
+    if (cacheKey !== this._strokeCacheKey) {
+      this._strokeCache = new WeakMap();
+      this._strokeCacheKey = cacheKey;
+    }
+    const strokeCache = this._strokeCache;
+    const getSubdivided = (stroke: TegakiGlyphData['s'][number]): SubdividedStroke => {
+      let sub = strokeCache.get(stroke);
+      if (!sub) {
+        sub = subdivideStroke(stroke, maxSegLenFU);
+        strokeCache.set(stroke, sub);
+      }
+      return sub;
+    };
+
     let y = 0;
     for (const lineIndices of layout.lines) {
       for (const charIdx of lineIndices) {
@@ -780,7 +825,7 @@ export class TegakiEngine {
             color,
             this._resolvedEffects,
             this._seed + charIdx,
-            this._quality?.segmentSize,
+            getSubdivided,
             this._timing?.strokeEasing,
           );
         } else if (!entry.hasGlyph && currentTime >= entry.offset + entry.duration) {
