@@ -2,7 +2,7 @@
 
 **Handwriting animation for any font**
 
-Tegaki (手書き) turns any Google Font into animated handwriting.
+Tegaki (手書き) turns any font into animated handwriting.
 No manual path authoring. No native dependencies. Just pick a font.
 
 [![npm](https://img.shields.io/npm/v/tegaki)](https://www.npmjs.com/package/tegaki)
@@ -72,7 +72,7 @@ Four handwriting fonts are bundled and ready to use:
 - **Tangerine** — `tegaki/fonts/tangerine`
 - **Parisienne** — `tegaki/fonts/parisienne`
 
-For other Google Fonts, use the [interactive generator](https://gkurt.com/tegaki/generator/) to create a custom bundle.
+For other fonts, use the [interactive generator](https://gkurt.com/tegaki/generator/) to create a custom bundle.
 
 ## Documentation
 

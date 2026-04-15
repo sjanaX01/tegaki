@@ -1,6 +1,6 @@
 # Tegaki
 
-Monorepo for generating and rendering handwriting animations from Google Fonts.
+Monorepo for generating and rendering handwriting animations from any font.
 
 ## Tech Stack
 
