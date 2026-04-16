@@ -85,6 +85,28 @@ export async function loadFont(fontPathOrPaths: string | string[]): Promise<Pars
   };
 }
 
+/**
+ * Enumerate every codepoint mapped to a real glyph in the font (and any extras).
+ * Skips `.notdef` (index 0), glyphs without a primary Unicode mapping, and
+ * whitespace-only codepoints. Returns the resulting characters as a string
+ * sorted by codepoint.
+ */
+export function enumerateFontChars(font: opentype.Font, extraFonts?: opentype.Font[]): string {
+  const codepoints = new Set<number>();
+  for (const f of [font, ...(extraFonts ?? [])]) {
+    for (let i = 0; i < f.glyphs.length; i++) {
+      const g = f.glyphs.get(i);
+      if (g.index === 0 || g.unicode == null) continue;
+      const ch = String.fromCodePoint(g.unicode);
+      if (ch.trim()) codepoints.add(g.unicode);
+    }
+  }
+  return [...codepoints]
+    .sort((a, b) => a - b)
+    .map((cp) => String.fromCodePoint(cp))
+    .join('');
+}
+
 export function extractGlyph(font: opentype.Font, char: string, extraFonts?: opentype.Font[]): RawGlyphData | null {
   let glyph = font.charToGlyph(char);
   let activeFont = font;

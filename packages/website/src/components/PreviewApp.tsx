@@ -8,6 +8,7 @@ import {
   type BrowserSkeletonMethod,
   DEFAULT_OPTIONS,
   EXAMPLE_FONTS,
+  enumerateFontChars,
   extractTegakiBundle,
   type ParsedFontInfo,
   type PipelineOptions,
@@ -532,19 +533,7 @@ export function PreviewApp() {
                   type="button"
                   className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
                   onClick={() => {
-                    const charSet = new Set<string>();
-                    const fonts = [fontInfo.font, ...(fontInfo.extraFonts ?? [])];
-                    for (const f of fonts) {
-                      for (let i = 0; i < f.glyphs.length; i++) {
-                        const g = f.glyphs.get(i);
-                        if (g.index !== 0 && g.unicode != null) {
-                          const ch = String.fromCodePoint(g.unicode);
-                          if (ch.trim()) charSet.add(ch);
-                        }
-                      }
-                    }
-                    const allChars = [...charSet].sort((a, b) => a.codePointAt(0)! - b.codePointAt(0)!);
-                    setChars(allChars.join(''));
+                    setChars(enumerateFontChars(fontInfo.font, fontInfo.extraFonts));
                   }}
                 >
                   Select all available

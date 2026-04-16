@@ -1,5 +1,6 @@
 import { CSS_DURATION, CSS_PROGRESS, CSS_TIME } from '../lib/css-properties.ts';
 import { computeTimeline } from '../lib/timeline.ts';
+import { cssFontFamily } from '../lib/utils.ts';
 import { resolveBundle } from './bundle-registry.ts';
 import type { CreateElementFn, TegakiEngineOptions } from './types.ts';
 
@@ -8,7 +9,7 @@ export const PAD_V_CSS = 'max(0.2em, 0.9em - 0.5lh)';
 export function buildRootProps(options: TegakiEngineOptions): Record<string, any> {
   const text = options.text ?? '';
   const font = resolveBundle(options.font);
-  const fontFamily = font?.family;
+  const fontFamily = font ? cssFontFamily(font) : undefined;
 
   const duration = text && font ? computeTimeline(text, font, options.timing).totalDuration : 0;
   const timeObj = typeof options.time === 'object' ? options.time : null;
@@ -33,7 +34,7 @@ export function buildRootProps(options: TegakiEngineOptions): Record<string, any
       maxWidth: '100%',
       width: 'auto',
       height: 'auto',
-      fontFamily: fontFamily ?? undefined,
+      fontFamily,
       direction: options.direction ?? undefined,
       [CSS_DURATION]: duration,
       [CSS_TIME]: time,

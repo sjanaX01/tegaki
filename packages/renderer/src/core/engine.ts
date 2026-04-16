@@ -16,7 +16,7 @@ import type { TextLayout } from '../lib/textLayout.ts';
 import { computeTextLayout } from '../lib/textLayout.ts';
 import type { Timeline, TimelineConfig, TimelineEntry } from '../lib/timeline.ts';
 import { computeTimeline } from '../lib/timeline.ts';
-import { graphemes } from '../lib/utils.ts';
+import { cssFontFamily, graphemes } from '../lib/utils.ts';
 import type { TegakiBundle, TegakiGlyphData } from '../types.ts';
 import { getBundle, registerBundle as registryRegisterBundle, resolveBundle } from './bundle-registry.ts';
 import { buildChildren, buildRootProps, domCreateElement } from './render-elements.ts';
@@ -393,7 +393,7 @@ export class TegakiEngine {
 
   private _updateDom(): void {
     // Font family
-    this._rootEl.style.fontFamily = this._font?.family ?? '';
+    this._rootEl.style.fontFamily = this._font ? cssFontFamily(this._font) : '';
 
     // Direction
     this._rootEl.style.direction = this._direction ?? '';
@@ -830,7 +830,7 @@ export class TegakiEngine {
           );
         } else if (!entry.hasGlyph && currentTime >= entry.offset + entry.duration) {
           const baseline = y + halfLeading + (font.ascender / font.unitsPerEm) * fontSize;
-          drawFallbackGlyph(ctx, char, x, baseline, fontSize, font.family, color, this._resolvedEffects, this._seed + charIdx);
+          drawFallbackGlyph(ctx, char, x, baseline, fontSize, cssFontFamily(font), color, this._resolvedEffects, this._seed + charIdx);
         }
       }
       y += lineHeight;

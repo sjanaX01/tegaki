@@ -109,6 +109,13 @@ export type TegakiEffects<T> = {
 
 export interface TegakiBundle {
   family: string;
+  /**
+   * Original font family name, used as a CSS fallback for characters not in
+   * the generated glyph set. Present when the bundle was generated from a
+   * subset of the font (the default). When absent, `family` is the original
+   * name (full-font bundle).
+   */
+  fallbackFamily?: string;
   lineCap: LineCap;
   fontUrl: string;
   fontFaceCSS: string;

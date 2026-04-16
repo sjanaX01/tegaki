@@ -17,6 +17,7 @@ import type { LineCap, TegakiBundle, TegakiGlyphData } from '../types.ts';
  */
 export function createBundle({
   family,
+  fallbackFamily,
   fontUrl,
   glyphData,
   lineCap = 'round',
@@ -25,6 +26,7 @@ export function createBundle({
   descender = -200,
 }: {
   family: string;
+  fallbackFamily?: string;
   fontUrl: string;
   glyphData: Record<string, TegakiGlyphData>;
   lineCap?: LineCap;
@@ -34,6 +36,7 @@ export function createBundle({
 }): TegakiBundle {
   return {
     family,
+    fallbackFamily,
     lineCap,
     fontUrl,
     fontFaceCSS: `@font-face { font-family: '${family}'; src: url(${fontUrl}); }`,

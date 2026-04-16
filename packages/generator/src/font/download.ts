@@ -1,7 +1,6 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CACHE_DIR } from '../constants.ts';
+import { CACHE_DIR, charsHash } from '../constants.ts';
 
 function slugify(family: string): string {
   return family.toLowerCase().replace(/\s+/g, '-');
@@ -37,13 +36,8 @@ export async function downloadFont(
 
   // Build a cache key that includes the character set (if any) so different
   // character requests don't collide in the cache.
-  const charsHash = options.chars
-    ? `-${createHash('md5')
-        .update([...new Set([...options.chars])].sort().join(''))
-        .digest('hex')
-        .slice(0, 8)}`
-    : '';
-  const cacheKey = `${slug}${charsHash}`;
+  const hashSuffix = options.chars ? `-${charsHash(options.chars)}` : '';
+  const cacheKey = `${slug}${hashSuffix}`;
   const manifestPath = join(cacheDir, `${cacheKey}.manifest.json`);
 
   // Check cache: if all previously-downloaded subset files still exist, reuse them

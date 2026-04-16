@@ -1,4 +1,4 @@
-import type { CSSLength } from '../types.ts';
+import type { CSSLength, TegakiBundle } from '../types.ts';
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
@@ -10,6 +10,15 @@ export function resolveCSSLength(value: CSSLength, fontSize: number): number {
 
 export function graphemes(text: string): string[] {
   return Array.from(segmenter.segment(text), (s) => s.segment);
+}
+
+/**
+ * Build the CSS `font-family` value for a bundle, including the fallback
+ * family when the bundle was generated from a subset.
+ */
+export function cssFontFamily(bundle: TegakiBundle): string {
+  if (bundle.fallbackFamily) return `'${bundle.family}', '${bundle.fallbackFamily}'`;
+  return `'${bundle.family}'`;
 }
 
 export type Coercible = string | number | boolean | null | undefined | readonly Coercible[];

@@ -222,3 +222,18 @@ export const DRAWING_SPEED = 3000;
  * Pause duration in seconds between consecutive strokes during animation.
  */
 export const STROKE_PAUSE = 0.15;
+
+/** FNV-1a hash → 8-char hex string. Browser-safe (no node:crypto). */
+export function shortHash(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/** Hash a character set: deduplicates, sorts, then hashes. */
+export function charsHash(chars: string): string {
+  return shortHash([...new Set([...chars])].sort().join(''));
+}
