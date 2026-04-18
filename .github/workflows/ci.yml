@@ -66,6 +66,12 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
+      # The Playwright container preinstalls @playwright/test globally. Combined
+      # with Bun's isolated install layout, the spec's `@playwright/test` import
+      # resolves to the global copy while the CLI loads the workspace copy —
+      # two instances of the same version trip Playwright's duplicate check.
+      - name: Remove container's global Playwright install
+        run: rm -rf /usr/lib/node_modules/playwright /usr/lib/node_modules/@playwright
       - run: bun i --frozen-lockfile
       # Always re-generate on PRs so flakes or legitimate diffs get captured as a
       # commit that authors can review, matching the `format` job's pattern.
