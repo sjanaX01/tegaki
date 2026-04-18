@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4321);
@@ -26,7 +27,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `bun astro dev --port ${PORT} --host 127.0.0.1`,
+    command: `bun dev --port ${PORT} --host 127.0.0.1`,
     url: `${BASE_URL}/tegaki/text-preview/`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
